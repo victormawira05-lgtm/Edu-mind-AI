@@ -1,1 +1,1 @@
-EDU MIND AI
+# Edu-mind-AI
