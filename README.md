@@ -5,8 +5,7 @@
 
 Edu-mind-AI is an AI-powered learning platform that explains complex topics in simple steps. Built for students, by students.
 
-**Live Demo:** https://github.com/victormawira05-lgtm/Edu-mind-AI
-
+**Live Demo:** https://edu-mind-ai.onrender.com
 ### ✨ Features (V1)
 - Ask any question — Math, Coding, Science, Git
 - Simple, fast answers
