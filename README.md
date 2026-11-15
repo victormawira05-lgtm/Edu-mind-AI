@@ -4,7 +4,7 @@
 EduMind AI helps students learn smarter by uploading PDFs and chatting with their documents. Built with FastAPI, PyPDF, and deployed on Render.
 
 **Live API:** `https://edu-mind-ai.onrender.com/docs` 
-
+frontend http://127.0.0.1:8000/docs
 ---
 
 ### 🚀 Features
