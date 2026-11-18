@@ -6,13 +6,17 @@ from fastapi.responses import HTMLResponse
 from pypdf import PdfReader
 import io
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
+TEMPLATE_FILE = os.path.join(TEMPLATE_DIR, "index.html")
+
 app = FastAPI(
     title="EduMind AI",
     description="Your intelligent AI learning assistant",
     version="1.0.0"
 )
 
-# Allow frontend to connect
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,24 +25,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create folders if missing
-os.makedirs("backend/static", exist_ok=True)
-os.makedirs("backend/templates", exist_ok=True)
+os.makedirs(STATIC_DIR, exist_ok=True)
+os.makedirs(TEMPLATE_DIR, exist_ok=True)
 
-# Mount static files (CSS)
-if os.path.exists("backend/static"):
-    app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+if os.path.exists(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# Store PDF text in memory
 document_context = {"text": "", "filename": ""}
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
-    # If index.html exists, serve it
-    if os.path.exists("backend/templates/index.html"):
-        with open("backend/templates/index.html", "r", encoding="utf-8") as f:
+    if os.path.exists(TEMPLATE_FILE):
+        with open(TEMPLATE_FILE, "r", encoding="utf-8") as f:
             return f.read()
-    # Otherwise return API message
     return """
     <h1>Welcome to EduMind AI! 🎓</h1>
     <p>Status: Running successfully</p>
@@ -47,8 +46,8 @@ async def home():
 
 @app.get("/app", response_class=HTMLResponse)
 async def serve_app():
-    if os.path.exists("backend/templates/index.html"):
-        with open("backend/templates/index.html", "r", encoding="utf-8") as f:
+    if os.path.exists(TEMPLATE_FILE):
+        with open(TEMPLATE_FILE, "r", encoding="utf-8") as f:
             return f.read()
     return "<h1>index.html not found in backend/templates/</h1>"
 
@@ -75,10 +74,8 @@ async def upload_pdf(file: UploadFile = File(...)):
     text = ""
     for page in reader.pages:
         text += page.extract_text() or ""
-    
     document_context["text"] = text
     document_context["filename"] = file.filename
-    
     return {
         "filename": file.filename,
         "pages": len(reader.pages),
@@ -90,7 +87,6 @@ async def upload_pdf(file: UploadFile = File(...)):
 async def chat(question: dict):
     q = question.get("question", "")
     context = document_context["text"][:3000] if document_context["text"] else "No document uploaded yet."
-    # Simple keyword search for now (upgrade to OpenAI later)
     return {
         "answer": f"Based on '{document_context['filename'] or 'no document'}': {context[:800]}...\n\nYour question was: {q}",
         "question": q
