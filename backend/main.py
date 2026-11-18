@@ -1,97 +1,65 @@
-import os
-from fastapi import FastAPI, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+﻿from fastapi import FastAPI, File, UploadFile, Request
+from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+import os
 from pypdf import PdfReader
-import io
+
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
-TEMPLATE_FILE = os.path.join(TEMPLATE_DIR, "index.html")
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-app = FastAPI(
-    title="EduMind AI",
-    description="Your intelligent AI learning assistant",
-    version="1.0.0"
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-os.makedirs(STATIC_DIR, exist_ok=True)
-os.makedirs(TEMPLATE_DIR, exist_ok=True)
-
-if os.path.exists(STATIC_DIR):
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-document_context = {"text": "", "filename": ""}
+# Global memory
+DOC_TEXT = ""
+DOC_NAME = ""
 
 @app.get("/", response_class=HTMLResponse)
-async def home():
-    if os.path.exists(TEMPLATE_FILE):
-        with open(TEMPLATE_FILE, "r", encoding="utf-8") as f:
-            return f.read()
-    return """
-    <h1>Welcome to EduMind AI! 🎓</h1>
-    <p>Status: Running successfully</p>
-    <p><a href='/docs'>Go to API Docs</a> | <a href='/app'>Go to App UI</a></p>
-    """
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
-@app.get("/app", response_class=HTMLResponse)
-async def serve_app():
-    if os.path.exists(TEMPLATE_FILE):
-        with open(TEMPLATE_FILE, "r", encoding="utf-8") as f:
-            return f.read()
-    return "<h1>index.html not found in backend/templates/</h1>"
-
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "application": "EduMind AI"}
-
-@app.get("/api/features")
-async def features():
-    return {
-        "features": [
-            "AI Learning Assistant",
-            "Intelligent Quiz Generator",
-            "Academic Performance Analysis",
-            "Personalized Revision Plans"
-        ]
-    }
+@app.get("/context")
+def get_context():
+    return {"loaded": bool(DOC_TEXT), "filename": DOC_NAME, "chars": len(DOC_TEXT)}
 
 @app.post("/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
-    global document_context
-    content = await file.read()
-    reader = PdfReader(io.BytesIO(content))
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text() or ""
-    document_context["text"] = text
-    document_context["filename"] = file.filename
-    return {
-        "filename": file.filename,
-        "pages": len(reader.pages),
-        "characters": len(text),
-        "preview": text[:500]
-    }
+    global DOC_TEXT, DOC_NAME
+    try:
+        reader = PdfReader(file.file)
+        text = ""
+        for page in reader.pages[:50]: # first 50 pages
+            t = page.extract_text()
+            if t:
+                text += t + "\n"
+        DOC_TEXT = text[:200000] # limit
+        DOC_NAME = file.filename
+        return {"status": "ok", "filename": DOC_NAME, "pages": len(reader.pages), "chars": len(DOC_TEXT)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 @app.post("/chat")
-async def chat(question: dict):
-    q = question.get("question", "")
-    context = document_context["text"][:3000] if document_context["text"] else "No document uploaded yet."
-    return {
-        "answer": f"Based on '{document_context['filename'] or 'no document'}': {context[:800]}...\n\nYour question was: {q}",
-        "question": q
-    }
+async def chat(data: dict):
+    global DOC_TEXT
+    q = data.get("question","").lower().strip()
+    if not DOC_TEXT:
+        return {"answer": "Please upload a PDF first."}
+    if not q:
+        return {"answer": "Ask something like: Summarize, explain chapter 2, etc."}
+    
+    # Simple smart search
+    if "summar" in q:
+        return {"answer": "SUMMARY of " + DOC_NAME + ":\n\n" + DOC_TEXT[:1500] + "...\n\n[Showing first 1500 chars. Ask specific section to get details]"}
+    
+    if "quiz" in q or "mcq" in q or "question" in q:
+        return {"answer": "Here are 5 quick quiz questions from your notes:\n1. What is the main topic of this document?\n2. Define: " + DOC_TEXT.split()[0:10].__str__() + "\n3. List 3 key points from page 1.\n4. Explain with example from your PDF.\n5. What did you learn? (Open)"}
 
-@app.get("/context")
-async def get_context():
-    return {"loaded": bool(document_context["text"]), "filename": document_context["filename"]}
+    # Keyword search
+    lines = DOC_TEXT.split("\n")
+    matches = [l for l in lines if any(word in l.lower() for word in q.split() if len(word)>3)][:8]
+    if matches:
+        return {"answer": "Found in your PDF:\n\n" + "\n---\n".join(matches) + "\n\nWant a simpler explanation? Ask 'Explain simply'"}
+    else:
+        # fallback: first 1000 chars
+        return {"answer": "I searched '" + q + "' but didn't find exact match. Here's start of your doc:\n\n" + DOC_TEXT[:1200]}

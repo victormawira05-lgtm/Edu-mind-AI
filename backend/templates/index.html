@@ -1,88 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EduMind AI - Chat With Your Notes</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-<style>body{font-family:Inter,sans-serif}</style>
-</head>
-<body class="bg-[#f6f8f7] min-h-screen">
-<div class="max-w-5xl mx-auto p-4 md:p-6">
-  <div class="bg-white rounded-2xl shadow-sm p-6 mb-6 flex justify-between items-center">
-    <div><h1 class="text-2xl font-bold">🎓 EduMind AI</h1><p class="text-gray-500 text-sm">Upload your notes. Chat like WhatsApp.</p></div>
-    <div class="text-xs px-3 py-1 bg-green-100 text-green-700 rounded-full">● Live</div>
-  </div>
-  <div class="grid md:grid-cols-3 gap-6">
-    <div class="space-y-6">
-      <div class="bg-white rounded-2xl shadow-sm p-5">
-        <h2 class="font-semibold mb-3">1. Upload PDF</h2>
-        <input id="fileInput" type="file" accept=".pdf" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-600 file:text-white"/>
-        <button onclick="uploadPDF()" id="uploadBtn" class="mt-4 w-full bg-blue-600 text-white py-2.5 rounded-xl font-semibold">Upload & Read</button>
-        <div id="uploadResult" class="mt-3 text-xs text-gray-600 hidden"></div>
-      </div>
-      <div class="bg-white rounded-2xl shadow-sm p-5">
-        <h2 class="font-semibold mb-2">Current Document</h2>
-        <div id="context" class="text-sm text-gray-500">No document loaded</div>
-      </div>
-    </div>
-    <div class="md:col-span-2 bg-white rounded-2xl shadow-sm flex flex-col h-[600px]">
-      <div class="p-4 border-b font-semibold">2. Ask Questions</div>
-      <div id="chatBox" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-        <div class="bg-blue-600 text-white p-3 rounded-2xl max-w-[80%]">Hi! Upload your notes and ask like "Summarize chapter 1" or "Give me 5 quiz questions".</div>
-      </div>
-      <div class="p-3 border-t flex gap-2">
-        <input id="question" type="text" placeholder="Ask: Explain Bayes theorem simply..." class="flex-1 border rounded-xl px-4 py-2.5 text-sm"/>
-        <button onclick="askChat()" class="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-semibold">Send</button>
-      </div>
-      <div class="p-2 flex gap-2 overflow-x-auto">
-        <button onclick="quick('Summarize this document in 5 points')" class="text-xs bg-gray-100 px-3 py-1.5 rounded-full">Summarize</button>
-        <button onclick="quick('Create 10 MCQs with answers')" class="text-xs bg-gray-100 px-3 py-1.5 rounded-full">Make Quiz</button>
-        <button onclick="quick('Explain simply like Form 1')" class="text-xs bg-gray-100 px-3 py-1.5 rounded-full">Explain Simply</button>
-      </div>
-    </div>
-  </div>
-</div>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EduMind AI</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-[#f5f5f5]">
+<div class="max-w-6xl mx-auto p-4">
+<div class="bg-white p-4 rounded-xl flex justify-between mb-4"><h1 class="font-bold text-xl">🎓 EduMind AI</h1><span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs">Live</span></div>
+<div class="grid md:grid-cols-3 gap-4">
+<div><div class="bg-white p-4 rounded-xl mb-4"><h2 class="font-bold mb-3">1. Upload PDF</h2><input id="fileInput" type="file" accept=".pdf" class="w-full text-sm"><button onclick="uploadPDF()" id="btnU" class="w-full mt-3 bg-blue-600 text-white py-2 rounded-xl">Upload & Read</button><div id="upRes" class="text-xs mt-2"></div></div><div class="bg-white p-4 rounded-xl"><h2 class="font-bold">Current Document</h2><div id="ctx" class="text-sm text-gray-500 mt-2">No document</div></div></div>
+<div class="md:col-span-2 bg-white rounded-xl flex flex-col h-[75vh]">
+<div class="p-3 border-b font-bold">2. Ask Questions</div>
+<div id="chatBox" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50"><div class="bg-blue-600 text-white p-3 rounded-2xl max-w-[85%]">Hi! Upload notes and ask e.g. "Summarize" or "Explain Data Structures"</div></div>
+<div class="p-3 border-t flex gap-2"><input id="question" class="flex-1 border rounded-xl px-4 py-3" placeholder="Type your question..."><button onclick="askChat()" id="btnSend" class="bg-blue-600 text-white px-6 rounded-xl font-bold">Send</button></div>
+<div class="p-2 flex gap-2"><button onclick="quick('Summarize this document')" class="text-xs bg-gray-100 px-3 py-1 rounded-full">Summarize</button><button onclick="quick('Make 5 quiz questions')" class="text-xs bg-gray-100 px-3 py-1 rounded-full">Quiz</button><button onclick="quick('Explain simply')" class="text-xs bg-gray-100 px-3 py-1 rounded-full">Explain</button></div>
+</div></div></div>
 <script>
-async function refreshContext(){
-  try{
-    const r = await fetch('/context'); const j = await r.json();
-    document.getElementById('context').innerHTML = j.loaded ? '✅ <b>'+j.filename+'</b> loaded' : 'No document loaded';
-  }catch(e){}
-}
-async function uploadPDF(){
-  const file = document.getElementById('fileInput').files[0];
-  if(!file) return alert('Choose PDF');
-  const btn = document.getElementById('uploadBtn'); btn.textContent='Reading...'; btn.disabled=true;
-  const fd = new FormData(); fd.append('file', file);
-  try{
-    const res = await fetch('/upload-pdf', {method:'POST', body:fd});
-    const data = await res.json();
-    document.getElementById('uploadResult').classList.remove('hidden');
-    document.getElementById('uploadResult').innerHTML = '✅ '+data.filename+'<br>'+data.pages+' pages';
-    addMsg('Perfect! Read '+data.pages+' pages. What do you want?', false);
-    refreshContext();
-  }catch(e){ alert('Upload failed: '+e) }
-  btn.textContent='Upload & Read'; btn.disabled=false;
-}
-function addMsg(text, isUser){
-  const box = document.getElementById('chatBox');
-  const div = document.createElement('div');
-  div.className = isUser ? 'bg-gray-900 text-white p-3 rounded-2xl max-w-[80%] ml-auto' : 'bg-white border p-3 rounded-2xl max-w-[80%]';
-  div.innerText = text; box.appendChild(div); box.scrollTop = box.scrollHeight;
-}
-async function askChat(){
-  const input = document.getElementById('question'); const q = input.value.trim(); if(!q) return;
-  addMsg(q, true); input.value='';
-  try{
-    const res = await fetch('/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({question:q})});
-    const data = await res.json(); addMsg(data.answer, false);
-  }catch(e){ addMsg('Error: '+e, false) }
-}
-function quick(t){ document.getElementById('question').value=t; askChat(); }
-document.getElementById('question').addEventListener('keydown', e=>{ if(e.key==='Enter') askChat() });
-refreshContext();
-</script>
-</body>
-</html>
+async function refresh(){const r=await fetch('/context');const j=await r.json();document.getElementById('ctx').innerHTML=j.loaded?'✅ <b>'+j.filename+'</b> loaded ('+j.chars+' chars)':'No document';}
+async function uploadPDF(){const f=document.getElementById('fileInput').files[0];if(!f)return alert('Choose PDF');const b=document.getElementById('btnU');b.textContent='Reading...';b.disabled=true;const fd=new FormData();fd.append('file',f);try{const res=await fetch('/upload-pdf',{method:'POST',body:fd});const d=await res.json();document.getElementById('upRes').innerText='✅ '+d.filename+' '+d.pages+' pages';refresh();add('Perfect! Ask anything now.',false);}catch(e){alert(e)}b.textContent='Upload & Read';b.disabled=false;}
+function add(t,isU){const box=document.getElementById('chatBox');const d=document.createElement('div');d.className=isU?'bg-black text-white p-3 rounded-2xl max-w-[80%] ml-auto':'bg-white border p-3 rounded-2xl max-w-[85%] whitespace-pre-wrap';d.innerText=t;box.appendChild(d);box.scrollTop=box.scrollHeight;}
+async function askChat(){const i=document.getElementById('question');const q=i.value.trim();if(!q)return;add(q,true);i.value='';add('Typing...',false);try{const r=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});const j=await r.json();document.getElementById('chatBox').lastChild.remove();add(j.answer,false);}catch(e){document.getElementById('chatBox').lastChild.remove();add('Error: '+e,false);}}
+function quick(t){document.getElementById('question').value=t;askChat();}
+document.getElementById('question').addEventListener('keydown',e=>{if(e.key==='Enter')askChat();});
+refresh();
+</script></body></html>
