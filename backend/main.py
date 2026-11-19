@@ -1,7 +1,7 @@
 ﻿from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-import os
+import os, traceback
 from pypdf import PdfReader
 
 app = FastAPI()
@@ -13,36 +13,37 @@ HTML_FILE = os.path.join(BASE_DIR, "templates", "index.html")
 DOC_TEXT = ""
 DOC_NAME = ""
 DOC_LINES = []
-
 USE_AI = False
 client = None
+INIT_ERROR = ""
+
 try:
     from openai import OpenAI
     api_key = os.getenv("OPENAI_API_KEY")
     if api_key:
         client = OpenAI(api_key=api_key)
         USE_AI = True
-        print("AI enabled")
+        INIT_ERROR = "AI ready"
+    else:
+        INIT_ERROR = "No API key found"
 except Exception as e:
-    print(f"Offline: {e}")
+    INIT_ERROR = str(e)
 
 def ai_simplify(text, user_q):
     if not USE_AI or not client:
-        return None
+        return f"OFFLINE MODE - Reason: {INIT_ERROR}"
     try:
-        prompt = f"You are EduMind AI tutor. PDF: {DOC_NAME}. User: {user_q}. Text: {text[:4000]}. Task: Give super simple explanation with bullets, real-life analogy, step-by-step if math."
-        resp = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role":"user","content":prompt}], max_tokens=800)
+        prompt = f"You are EduMind AI, a friendly tutor for students in Kenya. User uploaded {DOC_NAME}. User asks: '{user_q}'. Text from PDF: {text[:3500]}. Give a SUPER SIMPLE explanation: short bullets, simple English, real-life example from Kenya, step-by-step for math. If user asks simplify, do ELI12 style."
+        resp = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role":"user","content":prompt}], max_tokens=900)
         return resp.choices[0].message.content
     except Exception as e:
-        return None
+        return f"OPENAI ERROR: {str(e)}\n\nTrace: {traceback.format_exc()[:500]}\n\nFix: Check billing at platform.openai.com/account/billing, and key is valid."
 
 def offline_simplify(text, q):
-    s = f"SIMPLIFIED from {DOC_NAME}:\n\n"
-    for l in text.split("\n")[:12]:
+    s = f"Offline simplified notes from {DOC_NAME}:\n"
+    for l in text.split("\n")[:15]:
         if len(l.strip())>10:
-            s += "- " + l[:200] + "\n"
-    s += "\nExample: If 8 AC and 20 normal = 28 total, chance AC = 8/28 = 2/7\n"
-    s += "\nTip: Add OPENAI_API_KEY for GPT-4 explanations."
+            s += "- " + l[:220] + "\n"
     return s
 
 @app.get("/")
@@ -51,7 +52,7 @@ def home():
 
 @app.get("/context")
 def get_context():
-    return {"loaded": bool(DOC_TEXT), "filename": DOC_NAME, "chars": len(DOC_TEXT), "ai_enabled": USE_AI}
+    return {"loaded": bool(DOC_TEXT), "filename": DOC_NAME, "chars": len(DOC_TEXT), "ai_enabled": USE_AI, "init_error": INIT_ERROR}
 
 @app.post("/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
@@ -60,29 +61,23 @@ async def upload_pdf(file: UploadFile = File(...)):
     text = ""
     for p in reader.pages:
         t = p.extract_text()
-        if t:
-            text += t + "\n"
+        if t: text += t + "\n"
     DOC_TEXT = text
     DOC_LINES = [l for l in text.split("\n") if l.strip()]
     DOC_NAME = file.filename
-    return {"status": "ok", "filename": DOC_NAME, "pages": len(reader.pages), "chars": len(DOC_TEXT), "ai": USE_AI}
+    return {"status":"ok","filename":DOC_NAME,"pages":len(reader.pages),"chars":len(DOC_TEXT),"ai":USE_AI}
 
 @app.post("/chat")
 async def chat(data: dict):
     q = data.get("question","").strip()
     if not DOC_TEXT:
-        return {"answer": "Please upload PDF first."}
-    q_low = q.lower()
-    q_words = [w for w in q_low.split() if len(w)>3]
+        return {"answer": "Please upload a PDF first."}
+    q_words = [w for w in q.lower().split() if len(w)>3]
     relevant = ""
     for line in DOC_LINES:
         if any(w in line.lower() for w in q_words):
             relevant += line + "\n"
-            if len(relevant) > 1500:
-                break
-    ctx = relevant if relevant else DOC_TEXT[:2000]
-    if USE_AI:
-        ai_ans = ai_simplify(ctx, q)
-        if ai_ans:
-            return {"answer": ai_ans + "\n\n---\nPowered by GPT-4o-mini"}
-    return {"answer": offline_simplify(ctx, q)}
+            if len(relevant) > 2000: break
+    ctx = relevant if relevant else DOC_TEXT[:2500]
+    ans = ai_simplify(ctx, q)
+    return {"answer": ans}
