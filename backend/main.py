@@ -12,7 +12,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_KEY:
     client = google_genai.Client(api_key=GEMINI_KEY)
-    MODEL_NAME = "gemini-2.0-flash"
+    MODEL_NAME = "gemini-3.8-flash"
 else:
     client = None
     MODEL_NAME = None
