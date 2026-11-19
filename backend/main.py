@@ -12,10 +12,17 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_KEY:
     client = google_genai.Client(api_key=GEMINI_KEY)
-    MODEL_NAME = "gemini-3.8-flash"
 else:
     client = None
-    MODEL_NAME = None
+
+# FREE TIER FRIENDLY - tries cheap models first
+MODEL_LIST = [
+    "gemini-3.5-flash-lite",  # 1000/day
+    "gemini-2.5-flash-lite",  # 1000/day
+    "gemini-2.5-flash",
+    "gemma-3-27b-it",
+    "gemini-3.8-flash",       # 20/day - last resort
+]
 
 DOC_STORE = {}
 
@@ -29,8 +36,23 @@ def extract_text_from_pdf(file_bytes):
 def gemini_generate(prompt: str):
     if not client:
         raise Exception("GEMINI_API_KEY not set on Render")
-    resp = client.models.generate_content(model=MODEL_NAME, contents=prompt)
-    return resp.text
+    last_err = None
+    for model_id in MODEL_LIST:
+        try:
+            resp = client.models.generate_content(model=model_id, contents=prompt)
+            print(f"Used model: {model_id}")
+            return resp.text
+        except Exception as e:
+            print(f"Fail {model_id}: {e}")
+            last_err = e
+            # if quota error, try next model
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                continue
+            # if model not found, try next
+            if "404" in str(e) or "NOT_FOUND" in str(e):
+                continue
+            continue
+    raise HTTPException(500, f"All models failed. Last error: {last_err}. Wait 5 mins or add billing to API key.")
 
 HTML_PAGE = """<!DOCTYPE html>
 <html><head><meta name="viewport" content="width=device-width">
@@ -38,7 +60,7 @@ HTML_PAGE = """<!DOCTYPE html>
 <style>
 body{font-family:system-ui;padding:20px;max-width:600px;margin:auto;background:#f8fafc}
 .card{background:white;padding:20px;border-radius:16px;box-shadow:0 4px 12px #0001;margin:15px 0}
-button{background:#4f46e5;color:white;border:0;padding:12px 20px;border-radius:10px;width:100%;font-weight:bold}
+button{background:#4f46e5;color:white;border:0;padding:12px 20px;border-radius:10px;width:100%;font-weight:bold;cursor:pointer}
 input{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;margin:8px 0;box-sizing:border-box}
 pre{white-space:pre-wrap;background:#f1f5f9;padding:12px;border-radius:10px}
 </style></head>
@@ -52,8 +74,11 @@ async function upload(){
  const f=document.getElementById('pdf').files[0]; if(!f) return alert("Choose PDF");
  const fd=new FormData(); fd.append("file",f);
  document.getElementById('uploadResult').innerText="AI reading...";
- const r=await fetch("/upload",{method:"POST",body:fd}); const j=await r.json();
- document.getElementById('docId').value=j.doc_id||""; document.getElementById('uploadResult').innerText="ID: "+j.doc_id+"\\n\\n"+(j.summary||JSON.stringify(j,null,2));
+ try{
+  const r=await fetch("/upload",{method:"POST",body:fd}); const j=await r.json();
+  if(r.ok){ document.getElementById('docId').value=j.doc_id||""; document.getElementById('uploadResult').innerText="ID: "+j.doc_id+"\\n\\n"+(j.summary||""); }
+  else{ document.getElementById('uploadResult').innerText=JSON.stringify(j,null,2); }
+ }catch(e){ document.getElementById('uploadResult').innerText="Error: "+e }
 }
 async function ask(){
  const q=document.getElementById('question').value, d=document.getElementById('docId').value;
@@ -83,18 +108,22 @@ async def upload(file: UploadFile = File(...)):
         if len(text)<50: raise HTTPException(400, "PDF too small/scanned")
         doc_id = f"DOC{int(datetime.now().timestamp())}"
         DOC_STORE[doc_id]=text
-        summary = gemini_generate(f"Summarize in 5 bullets simple English + 1 line Swahili:\\n{text[:8000]}")
+        summary = gemini_generate(f"Summarize in 5 bullets simple English + 1 line Swahili:\n{text[:8000]}")
         return {"doc_id": doc_id, "summary": summary, "chars": len(text)}
-    except Exception as e: raise HTTPException(500, str(e))
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 @app.post("/ask")
 async def ask_q(question: str = Form(...), doc_id: str = Form(...)):
     if doc_id not in DOC_STORE: raise HTTPException(404, "Upload first")
-    ans = gemini_generate(f"Answer ONLY from notes. Notes:{DOC_STORE[doc_id][:10000]}\\nQ:{question}\\nEnglish+Swahili:")
-    return {"answer": ans}
+    ans = gemini_generate(f"Answer ONLY from notes. Notes:{DOC_STORE[doc_id][:10000]}\nQ:{question}\nEnglish+Swahili:")
+    return {"answer": ans, "doc_id": doc_id}
 
 @app.post("/generate-quiz")
 async def gen_quiz(doc_id: str = Form(...), num: int = Form(3)):
     if doc_id not in DOC_STORE: raise HTTPException(404, "Upload first")
-    q = gemini_generate(f"Create {num} MCQs JSON [{{q,options[4],answer}}]:\\n{DOC_STORE[doc_id][:8000]}")
-    return {"quiz": q}
+    q = gemini_generate(f"Create {num} MCQs JSON [{{q,options[4],answer}}]:\n{DOC_STORE[doc_id][:8000]}")
+    return {"doc_id": doc_id, "quiz": q}
+
+@app.get("/health")
+def health(): return {"status":"ok", "models": MODEL_LIST, "docs": len(DOC_STORE)}
