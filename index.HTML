@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width">
+<title>EduMind AI</title>
+<style>
+body{font-family:system-ui;padding:20px;max-width:600px;margin:auto;background:#f8fafc}
+.card{background:white;padding:20px;border-radius:16px;box-shadow:0 4px 12px #0001;margin:15px 0}
+button{background:#4f46e5;color:white;border:0;padding:12px 20px;border-radius:10px;width:100%;font-weight:bold}
+input{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;margin:8px 0}
+pre{white-space:pre-wrap;background:#f1f5f9;padding:12px;border-radius:10px}
+</style>
+</head>
+<body>
+<h1>🧠 EduMind AI</h1>
+<p>Upload. Learn. Master.</p>
+
+<div class="card">
+<h3>1. Upload PDF Notes</h3>
+<input type="file" id="pdf" accept=".pdf">
+<button onclick="upload()">Upload & Summarize</button>
+<pre id="uploadResult"></pre>
+</div>
+
+<div class="card">
+<h3>2. Ask Question</h3>
+<input id="docId" placeholder="Paste Doc ID from above">
+<input id="question" placeholder="e.g., What is photosynthesis?">
+<button onclick="ask()">Ask EduMind</button>
+<pre id="askResult"></pre>
+</div>
+
+<script>
+const API = "";
+let lastDoc = "";
+async function upload(){
+  const file = document.getElementById('pdf').files[0];
+  if(!file) return alert("Choose PDF");
+  const fd = new FormData(); fd.append("file", file);
+  document.getElementById('uploadResult').innerText = "Uploading & AI reading...";
+  const r = await fetch(API+"/upload", {method:"POST", body:fd});
+  const j = await r.json();
+  lastDoc = j.doc_id; document.getElementById('docId').value = lastDoc;
+  document.getElementById('uploadResult').innerText = "Doc ID: "+j.doc_id+"\n\nSUMMARY:\n"+(j.summary||JSON.stringify(j,null,2));
+}
+async function ask(){
+  const q = document.getElementById('question').value;
+  const d = document.getElementById('docId').value;
+  if(!q||!d) return alert("Need Doc ID + Question");
+  const fd = new FormData(); fd.append("question", q); fd.append("doc_id", d);
+  document.getElementById('askResult').innerText = "Thinking...";
+  const r = await fetch(API+"/ask", {method:"POST", body:fd});
+  const j = await r.json();
+  document.getElementById('askResult').innerText = j.answer||JSON.stringify(j,null,2);
+}
+</script>
+</body>
+</html>
