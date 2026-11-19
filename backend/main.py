@@ -1,7 +1,7 @@
 ﻿from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-import os, traceback
+import os
 from pypdf import PdfReader
 
 app = FastAPI()
@@ -14,36 +14,39 @@ DOC_TEXT = ""
 DOC_NAME = ""
 DOC_LINES = []
 USE_AI = False
-client = None
-INIT_ERROR = ""
+AI_TYPE = ""
 
 try:
-    from openai import OpenAI
-    api_key = os.getenv("OPENAI_API_KEY")
-    if api_key:
-        client = OpenAI(api_key=api_key)
+    import google.generativeai as genai
+    gem_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if gem_key:
+        genai.configure(api_key=gem_key)
         USE_AI = True
-        INIT_ERROR = "AI ready"
+        AI_TYPE = "Gemini FREE"
+        print("Gemini ready")
     else:
-        INIT_ERROR = "No API key found"
+        AI_TYPE = "No GEMINI_API_KEY - offline"
 except Exception as e:
-    INIT_ERROR = str(e)
+    AI_TYPE = str(e)
 
 def ai_simplify(text, user_q):
-    if not USE_AI or not client:
-        return f"OFFLINE MODE - Reason: {INIT_ERROR}"
+    if not USE_AI:
+        return f"Offline mode - {AI_TYPE}\n" + offline_simplify(text, user_q)
     try:
-        prompt = f"You are EduMind AI, a friendly tutor for students in Kenya. User uploaded {DOC_NAME}. User asks: '{user_q}'. Text from PDF: {text[:3500]}. Give a SUPER SIMPLE explanation: short bullets, simple English, real-life example from Kenya, step-by-step for math. If user asks simplify, do ELI12 style."
-        resp = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role":"user","content":prompt}], max_tokens=900)
-        return resp.choices[0].message.content
+        import google.generativeai as genai
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        prompt = f"You are EduMind AI tutor for Kenyan students. User uploaded {DOC_NAME}. User asks: {user_q}. PDF text: {text[:4000]}. Give SUPER SIMPLE explanation: bullets, simple English, Kenyan example, step-by-step for math. If user says simplify, do ELI12."
+        resp = model.generate_content(prompt)
+        return resp.text
     except Exception as e:
-        return f"OPENAI ERROR: {str(e)}\n\nTrace: {traceback.format_exc()[:500]}\n\nFix: Check billing at platform.openai.com/account/billing, and key is valid."
+        return f"GEMINI ERROR: {e}\n\nOffline fallback:\n" + offline_simplify(text, user_q)
 
 def offline_simplify(text, q):
-    s = f"Offline simplified notes from {DOC_NAME}:\n"
-    for l in text.split("\n")[:15]:
+    s = f"Simplified notes from {DOC_NAME}:\n"
+    for l in text.split("\n")[:12]:
         if len(l.strip())>10:
             s += "- " + l[:220] + "\n"
+    s += "\nExample: 8 AC out of 28 total = 2/7 chance"
     return s
 
 @app.get("/")
@@ -52,7 +55,7 @@ def home():
 
 @app.get("/context")
 def get_context():
-    return {"loaded": bool(DOC_TEXT), "filename": DOC_NAME, "chars": len(DOC_TEXT), "ai_enabled": USE_AI, "init_error": INIT_ERROR}
+    return {"loaded": bool(DOC_TEXT), "filename": DOC_NAME, "chars": len(DOC_TEXT), "ai_enabled": USE_AI, "ai_type": AI_TYPE}
 
 @app.post("/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
@@ -71,13 +74,12 @@ async def upload_pdf(file: UploadFile = File(...)):
 async def chat(data: dict):
     q = data.get("question","").strip()
     if not DOC_TEXT:
-        return {"answer": "Please upload a PDF first."}
+        return {"answer": "Please upload PDF first."}
     q_words = [w for w in q.lower().split() if len(w)>3]
     relevant = ""
     for line in DOC_LINES:
         if any(w in line.lower() for w in q_words):
             relevant += line + "\n"
-            if len(relevant) > 2000: break
-    ctx = relevant if relevant else DOC_TEXT[:2500]
-    ans = ai_simplify(ctx, q)
-    return {"answer": ans}
+            if len(relevant) > 2500: break
+    ctx = relevant if relevant else DOC_TEXT[:3000]
+    return {"answer": ai_simplify(ctx, q)}
