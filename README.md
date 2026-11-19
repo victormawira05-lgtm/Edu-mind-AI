@@ -9,7 +9,7 @@ EduMind AI helps students learn smarter by uploading PDFs and chatting with thei
 
 **Live API:** `https://edu-mind-ai.onrender.com/docs` 
 <<<<<<< HEAD
-https://edu-mind-ai.onrender.com
+https://edu-mind-ai.onrender.com/
 =======
 
 >>>>>>> 4304fd5 (Add beautiful frontend)
