@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -17,36 +17,34 @@ USE_AI = False
 AI_TYPE = ""
 
 try:
-    import google.generativeai as genai
+    from google import genai
     gem_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if gem_key:
-        genai.configure(api_key=gem_key)
         USE_AI = True
-        AI_TYPE = "Gemini FREE"
-        print("Gemini ready")
+        AI_TYPE = "Gemini 2.0 Flash FREE (new SDK)"
     else:
-        AI_TYPE = "No GEMINI_API_KEY - offline"
+        AI_TYPE = "No GEMINI_API_KEY"
 except Exception as e:
-    AI_TYPE = str(e)
+    AI_TYPE = f"Import error: {e}"
 
 def ai_simplify(text, user_q):
     if not USE_AI:
-        return f"Offline mode - {AI_TYPE}\n" + offline_simplify(text, user_q)
+        return offline_simplify(text, user_q)
     try:
-        import google.generativeai as genai
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        prompt = f"You are EduMind AI tutor for Kenyan students. User uploaded {DOC_NAME}. User asks: {user_q}. PDF text: {text[:4000]}. Give SUPER SIMPLE explanation: bullets, simple English, Kenyan example, step-by-step for math. If user says simplify, do ELI12."
-        resp = model.generate_content(prompt)
-        return resp.text
+        from google import genai
+        gem_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        client = genai.Client(api_key=gem_key)
+        prompt = f"You are EduMind AI tutor for Kenyan students. PDF: {DOC_NAME}. User asks: {user_q}. PDF text: {text[:4000]}. Give SUPER SIMPLE explanation: short bullets, simple English, Kenyan example, step-by-step for math. Explain like I'm 12."
+        response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+        return response.text
     except Exception as e:
-        return f"GEMINI ERROR: {e}\n\nOffline fallback:\n" + offline_simplify(text, user_q)
+        return f"GEMINI ERROR: {e}\n\nOffline:\n" + offline_simplify(text, user_q)
 
 def offline_simplify(text, q):
     s = f"Simplified notes from {DOC_NAME}:\n"
     for l in text.split("\n")[:12]:
         if len(l.strip())>10:
             s += "- " + l[:220] + "\n"
-    s += "\nExample: 8 AC out of 28 total = 2/7 chance"
     return s
 
 @app.get("/")
@@ -64,7 +62,8 @@ async def upload_pdf(file: UploadFile = File(...)):
     text = ""
     for p in reader.pages:
         t = p.extract_text()
-        if t: text += t + "\n"
+        if t:
+            text += t + "\n"
     DOC_TEXT = text
     DOC_LINES = [l for l in text.split("\n") if l.strip()]
     DOC_NAME = file.filename
@@ -80,6 +79,7 @@ async def chat(data: dict):
     for line in DOC_LINES:
         if any(w in line.lower() for w in q_words):
             relevant += line + "\n"
-            if len(relevant) > 2500: break
+            if len(relevant) > 2500:
+                break
     ctx = relevant if relevant else DOC_TEXT[:3000]
     return {"answer": ai_simplify(ctx, q)}
