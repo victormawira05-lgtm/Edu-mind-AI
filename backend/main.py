@@ -1,17 +1,14 @@
-import os
-import io
+import os, io
 from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 import PyPDF2
 import google.generativeai as genai
 
 app = FastAPI(title="EduMind AI", version="2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Setup Gemini
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_KEY:
     genai.configure(api_key=GEMINI_KEY)
@@ -28,64 +25,110 @@ def extract_text_from_pdf(file_bytes):
         text += (page.extract_text() or "") + "\n"
     return text[:15000]
 
-# ---- Frontend files ----
-# Create static folder if not exists
-os.makedirs("backend/static", exist_ok=True)
-if os.path.exists("backend/static"):
-    try:
-        app.mount("/static", StaticFiles(directory="backend/static"), name="static")
-    except:
-        pass
+HTML_PAGE = """
+<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width">
+<title>EduMind AI</title>
+<style>
+body{font-family:system-ui;padding:20px;max-width:600px;margin:auto;background:#f8fafc}
+.card{background:white;padding:20px;border-radius:16px;box-shadow:0 4px 12px #0001;margin:15px 0}
+button{background:#4f46e5;color:white;border:0;padding:12px 20px;border-radius:10px;width:100%;font-weight:bold;cursor:pointer}
+input{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;margin:8px 0;box-sizing:border-box}
+pre{white-space:pre-wrap;background:#f1f5f9;padding:12px;border-radius:10px;overflow-x:auto}
+.badge{display:inline-block;background:#e0e7ff;color:#4338ca;padding:4px 10px;border-radius:20px;font-size:12px}
+</style></head>
+<body>
+<h1>🧠 EduMind AI</h1>
+<p>Upload. Learn. Master. <span class="badge">LIVE</span></p>
 
-@app.get("/")
+<div class="card">
+<h3>1. Upload PDF Notes</h3>
+<input type="file" id="pdf" accept=".pdf">
+<button onclick="upload()">Upload & Summarize</button>
+<pre id="uploadResult">No file yet</pre>
+</div>
+
+<div class="card">
+<h3>2. Ask Question</h3>
+<input id="docId" placeholder="Paste Doc ID">
+<input id="question" placeholder="e.g., What is photosynthesis?">
+<button onclick="ask()">Ask EduMind</button>
+<pre id="askResult"></pre>
+</div>
+
+<div class="card">
+<h3>3. Generate Quiz</h3>
+<button onclick="quiz()">Create Quiz (3 Qs)</button>
+<pre id="quizResult"></pre>
+</div>
+
+<script>
+async function upload(){
+  const f=document.getElementById('pdf').files[0];
+  if(!f) return alert("Choose PDF");
+  const fd=new FormData(); fd.append("file", f);
+  document.getElementById('uploadResult').innerText="Uploading & AI reading...";
+  try{
+    const r=await fetch("/upload",{method:"POST",body:fd});
+    const j=await r.json();
+    if(j.doc_id){ document.getElementById('docId').value=j.doc_id; }
+    document.getElementById('uploadResult').innerText="Doc ID: "+(j.doc_id||"")+"\\n\\nSUMMARY:\\n"+(j.summary||JSON.stringify(j,null,2));
+  }catch(e){ document.getElementById('uploadResult').innerText="Error: "+e }
+}
+async function ask(){
+  const q=document.getElementById('question').value;
+  const d=document.getElementById('docId').value;
+  if(!q||!d) return alert("Need Doc ID + Question");
+  const fd=new FormData(); fd.append("question",q); fd.append("doc_id",d);
+  document.getElementById('askResult').innerText="Thinking...";
+  const r=await fetch("/ask",{method:"POST",body:fd}); const j=await r.json();
+  document.getElementById('askResult').innerText=j.answer||JSON.stringify(j,null,2);
+}
+async function quiz(){
+  const d=document.getElementById('docId').value;
+  if(!d) return alert("Upload first");
+  const fd=new FormData(); fd.append("doc_id",d); fd.append("num","3");
+  document.getElementById('quizResult').innerText="Generating...";
+  const r=await fetch("/generate-quiz",{method:"POST",body:fd}); const j=await r.json();
+  document.getElementById('quizResult').innerText=j.quiz||JSON.stringify(j,null,2);
+}
+</script>
+</body></html>
+"""
+
+@app.get("/", response_class=HTMLResponse)
 def root():
-    # If frontend exists, show it, else show API status
-    index_path = "backend/static/index.html"
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"service": "EduMind AI", "status": "live", "ai": "Gemini connected" if model else "Add GEMINI_API_KEY", "tagline": "Upload. Learn. Master.", "frontend": "Create backend/static/index.html to see UI"}
+    return HTML_PAGE
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
     if not model:
-        raise HTTPException(500, "GEMINI_API_KEY not set on Render - Add it in Environment")
+        raise HTTPException(500, "GEMINI_API_KEY not set on Render")
     try:
         data = await file.read()
         text = extract_text_from_pdf(data)
         if len(text) < 50:
-            raise HTTPException(400, "PDF text too small or scanned image - try text PDF")
-        
+            raise HTTPException(400, "PDF text too small or scanned image")
         doc_id = f"DOC{int(datetime.now().timestamp())}"
         DOC_STORE[doc_id] = text
-        
-        prompt = f"Summarize these study notes in 5 bullet points, simple English + 1 line Swahili translation:\n\n{text[:8000]}"
+        prompt = f"Summarize in 5 bullets simple English + 1 line Swahili:\\n\\n{text[:8000]}"
         summary = model.generate_content(prompt).text
-        
         return {"doc_id": doc_id, "filename": file.filename, "chars": len(text), "summary": summary}
     except Exception as e:
         raise HTTPException(500, str(e))
 
 @app.post("/ask")
-async def ask(question: str = Form(...), doc_id: str = Form(...)):
-    if doc_id not in DOC_STORE:
-        raise HTTPException(404, "Upload document first")
-    if not model:
-        raise HTTPException(500, "No API key")
-    
+async def ask_q(question: str = Form(...), doc_id: str = Form(...)):
+    if doc_id not in DOC_STORE: raise HTTPException(404, "Upload first")
     context = DOC_STORE[doc_id][:10000]
-    prompt = f"You are EduMind tutor. Answer ONLY from these notes. If answer not in notes, say 'Not in your notes'. Notes:\n{context}\n\nQuestion: {question}\nAnswer in clear English, then Swahili if needed."
+    prompt = f"Answer ONLY from notes. Notes:{context}\\nQ:{question}\\nAnswer in English + Swahili if needed."
     ans = model.generate_content(prompt).text
     return {"answer": ans, "doc_id": doc_id}
 
 @app.post("/generate-quiz")
 async def quiz(doc_id: str = Form(...), num: int = Form(3)):
-    if doc_id not in DOC_STORE:
-        raise HTTPException(404, "Upload first")
+    if doc_id not in DOC_STORE: raise HTTPException(404, "Upload first")
     context = DOC_STORE[doc_id][:8000]
-    prompt = f"Create {num} multiple choice quizzes from these notes. Format JSON like [{{q, options[4], answer}}]:\n{context}"
+    prompt = f"Create {num} MCQs JSON [{{q, options[4], answer}}]:\\n{context}"
     res = model.generate_content(prompt).text
     return {"doc_id": doc_id, "quiz": res}
-
-@app.get("/docs-store")
-def list_docs():
-    return {"count": len(DOC_STORE), "ids": list(DOC_STORE.keys())}
