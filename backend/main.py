@@ -1,10 +1,12 @@
 import os
+import io
+from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import PyPDF2
 import google.generativeai as genai
-from datetime import datetime
-import io
 
 app = FastAPI(title="EduMind AI", version="2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -17,34 +19,45 @@ if GEMINI_KEY:
 else:
     model = None
 
-# In-memory store (use ChromaDB later for production)
 DOC_STORE = {}
 
 def extract_text_from_pdf(file_bytes):
     pdf = PyPDF2.PdfReader(io.BytesIO(file_bytes))
     text = ""
-    for page in pdf.pages[:10]:  # first 10 pages to stay within limits
-        text += page.extract_text() + "\n"
-    return text[:15000]  # Gemini limit
+    for page in pdf.pages[:10]:
+        text += (page.extract_text() or "") + "\n"
+    return text[:15000]
+
+# ---- Frontend files ----
+# Create static folder if not exists
+os.makedirs("backend/static", exist_ok=True)
+if os.path.exists("backend/static"):
+    try:
+        app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+    except:
+        pass
 
 @app.get("/")
 def root():
-    return {"service": "EduMind AI", "status": "live", "ai": "Gemini connected" if model else "Add API key", "tagline": "Upload. Learn. Master."}
+    # If frontend exists, show it, else show API status
+    index_path = "backend/static/index.html"
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"service": "EduMind AI", "status": "live", "ai": "Gemini connected" if model else "Add GEMINI_API_KEY", "tagline": "Upload. Learn. Master.", "frontend": "Create backend/static/index.html to see UI"}
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
     if not model:
-        raise HTTPException(500, "GEMINI_API_KEY not set on Render")
+        raise HTTPException(500, "GEMINI_API_KEY not set on Render - Add it in Environment")
     try:
         data = await file.read()
         text = extract_text_from_pdf(data)
         if len(text) < 50:
-            raise HTTPException(400, "PDF text too small or scanned image")
+            raise HTTPException(400, "PDF text too small or scanned image - try text PDF")
         
         doc_id = f"DOC{int(datetime.now().timestamp())}"
         DOC_STORE[doc_id] = text
         
-        # Auto summarize on upload
         prompt = f"Summarize these study notes in 5 bullet points, simple English + 1 line Swahili translation:\n\n{text[:8000]}"
         summary = model.generate_content(prompt).text
         
