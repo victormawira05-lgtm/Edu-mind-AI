@@ -4,3 +4,6 @@ python-multipart
 PyPDF2
 google-genai
 python-dotenv
+supabase
+python-jose[cryptography]
+python-dotenv
