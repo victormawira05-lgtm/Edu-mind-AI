@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator
@@ -42,8 +42,6 @@ class QuizGenerateRequest(BaseModel):
 
 
 class StudentQuizQuestion(BaseModel):
-    """Student-facing question model: intentionally omits correct_option_index."""
-
     id: str
     prompt: str
     options: List[str]

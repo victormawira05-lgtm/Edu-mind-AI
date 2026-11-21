@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 from dataclasses import dataclass
@@ -47,11 +47,6 @@ async def get_current_user(
     authorization: Optional[str] = Header(default=None),
     x_dev_user_id: Optional[str] = Header(default=None, alias="X-Dev-User-Id"),
 ) -> AuthenticatedUser:
-    """
-    Enforce authenticated user identity.
-    In local testing/dev only, if ALLOW_DEV_AUTH_BYPASS=true and X-Dev-User-Id is supplied,
-    resolve that explicit test user ID; otherwise require a valid Bearer JWT.
-    """
     if (
         os.getenv("ALLOW_DEV_AUTH_BYPASS", "").lower() == "true"
         and x_dev_user_id

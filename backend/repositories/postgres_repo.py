@@ -1,48 +1,31 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
 
-import psycopg
-from psycopg.rows import dict_row
 
 from backend.repositories.base import StoredQuizRecord, StudyRepository
-from backend.schemas.documents import (
-    DocumentCategory,
-    DocumentChunkRecord,
-    UploadedDocumentSummary,
-)
-from backend.schemas.past_papers import (
-    EvidencePointer,
-    ExtractedPastPaperQuestion,
-    LectureLink,
-    NON_GUARANTEE_DISCLAIMER,
-    PastPaperInsightsResponse,
-    QuestionType,
-    TopicRecurrenceEntry,
-)
-from backend.schemas.quiz import (
-    GeneratedQuizPayload,
-    QuizAttemptResult,
-    QuestionGradeResult,
-    WorkspaceProfilePayload,
-)
-from backend.services.readiness_analyzer import AttemptRecordEntry
+
+def _load_psycopg():
+    try:
+        import psycopg
+        from psycopg.rows import dict_row
+    except ImportError as exc:
+        raise RuntimeError(
+            'psycopg is required for PostgresRepository. Install it with: pip install "psycopg[binary]"'
+        ) from exc
+    return psycopg, dict_row
 
 
 class PostgresRepository(StudyRepository):
-    """
-    PostgreSQL / Supabase repository scoped by user_id and unit_id.
-    Expects migrations 002, 003, and 004 to be applied.
-    """
-
     def __init__(self, database_url: str) -> None:
         if not database_url or not database_url.strip():
             raise ValueError("DATABASE_URL must be configured for PostgresRepository.")
         self._database_url = database_url.strip()
 
-    def _connect(self) -> psycopg.Connection[Any]:
+    def _connect(self):
+        psycopg, dict_row = _load_psycopg()
         return psycopg.connect(self._database_url, row_factory=dict_row)
 
     @staticmethod
@@ -52,16 +35,10 @@ class PostgresRepository(StudyRepository):
         cleaned = unit_id.strip()
         return cleaned or None
 
-    # --- Workspace (P1) ---
-    # Note: Ensure a workspace_profiles table exists if persisting workspaces in Postgres.
     def get_workspace(self, user_id: str) -> WorkspaceProfilePayload:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
-                """
-                select payload_json
-                from public.workspace_profiles
-                where user_id = %s
-                """,
+                "select payload_json from public.workspace_profiles where user_id = %s",
                 (user_id,),
             )
             row = cur.fetchone()
@@ -88,7 +65,6 @@ class PostgresRepository(StudyRepository):
             conn.commit()
         return profile
 
-    # --- Documents & Chunks (Migration 002) ---
     def save_document_with_chunks(
         self,
         user_id: str,
@@ -216,7 +192,6 @@ class PostgresRepository(StudyRepository):
             for r in rows
         ]
 
-    # --- Quizzes & Attempts (Migration 004) ---
     def save_quiz(
         self,
         user_id: str,
@@ -377,7 +352,6 @@ class PostgresRepository(StudyRepository):
             )
         return entries
 
-    # --- Past-Paper Insights (Migration 003) ---
     def save_past_paper_insights(
         self, user_id: str, unit_id: str, insights: PastPaperInsightsResponse
     ) -> None:
@@ -563,3 +537,4 @@ class PostgresRepository(StudyRepository):
             recurrence=recurrence,
             disclaimer=NON_GUARANTEE_DISCLAIMER,
         )
+

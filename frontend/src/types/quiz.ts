@@ -1,4 +1,4 @@
-export interface LectureReference {
+﻿export interface LectureReference {
   document_title: string;
   section_or_page?: string | null;
   excerpt?: string | null;
@@ -44,11 +44,4 @@ export interface QuizAttemptResult {
   total_questions: number;
   percentage: number;
   results: GradedQuestionResult[];
-}
-
-export interface WorkspaceProfile {
-  institution?: string | null;
-  programme?: string | null;
-  semester?: string | null;
-  units: string[];
 }

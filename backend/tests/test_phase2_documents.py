@@ -1,6 +1,7 @@
-import io
+﻿import io
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
+from pypdf.generic import ContentStream, DictionaryObject, NameObject
 
 from backend import main as backend_main
 
@@ -10,23 +11,28 @@ def _make_pdf_bytes(page_texts: list[str]) -> bytes:
     for text in page_texts:
         writer.add_blank_page(width=200, height=200)
         if text:
-            # pypdf blank pages have no text stream; use a minimal content stream when text is given
-            from pypdf.generic import ContentStream, NameObject, TextStringObject
-
             page = writer.pages[-1]
             safe = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
             stream = ContentStream(None, writer)
             stream._data = f"BT /F1 12 Tf 20 100 Td ({safe}) Tj ET".encode("latin-1")
             page[NameObject("/Contents")] = stream
             font_dict = writer._add_object(
-                {
-                    NameObject("/Type"): NameObject("/Font"),
-                    NameObject("/Subtype"): NameObject("/Type1"),
-                    NameObject("/BaseFont"): NameObject("/Helvetica"),
-                }
+                DictionaryObject(
+                    {
+                        NameObject("/Type"): NameObject("/Font"),
+                        NameObject("/Subtype"): NameObject("/Type1"),
+                        NameObject("/BaseFont"): NameObject("/Helvetica"),
+                    }
+                )
             )
             page[NameObject("/Resources")] = writer._add_object(
-                {NameObject("/Font"): {NameObject("/F1"): font_dict}}
+                DictionaryObject(
+                    {
+                        NameObject("/Font"): DictionaryObject(
+                            {NameObject("/F1"): font_dict}
+                        )
+                    }
+                )
             )
     buf = io.BytesIO()
     writer.write(buf)
@@ -88,7 +94,6 @@ def test_multi_document_chunking_source_metadata_and_unit_isolation(monkeypatch)
     )
     assert r2.status_code == 201
 
-    # Retrieve within MAT120 for student-1
     ret = client.post(
         "/api/units/MAT120/retrieve",
         headers=headers,
@@ -104,7 +109,6 @@ def test_multi_document_chunking_source_metadata_and_unit_isolation(monkeypatch)
         assert item["source"]["unit_id"] == "MAT120"
         assert item["source"]["page_number"] >= 1
 
-    # Other user cannot retrieve student-1's chunks
     other_ret = client.post(
         "/api/units/MAT120/retrieve",
         headers={"X-Dev-User-Id": "student-other"},
