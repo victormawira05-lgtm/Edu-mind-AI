@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import List, Optional
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, status
@@ -14,9 +13,11 @@ from pypdf import PdfReader
 from backend.auth import AuthenticatedUser, get_current_user, verify_owner
 from backend.providers.base import AIProvider
 from backend.providers.gemini_provider import GeminiProvider
+from backend.repositories.base import StudyRepository
+from backend.repositories.memory_repo import InMemoryRepository
+from backend.repositories.postgres_repo import PostgresRepository
 from backend.schemas.documents import (
     DocumentCategory,
-    DocumentChunkRecord,
     RetrieveRequest,
     RetrieveResponse,
     ScannedPdfErrorDetail,
@@ -24,7 +25,6 @@ from backend.schemas.documents import (
 )
 from backend.schemas.past_papers import PastPaperInsightsResponse
 from backend.schemas.quiz import (
-    GeneratedQuizPayload,
     QuizAttemptResult,
     QuizGenerateRequest,
     QuizSubmitRequest,
@@ -39,29 +39,15 @@ from backend.services.pdf_ingestion import (
     ingest_pdf_document,
 )
 from backend.services.quiz_grader import grade_quiz_submission
-from backend.services.readiness_analyzer import (
-    AttemptRecordEntry,
-    build_readiness_dashboard,
-)
+from backend.services.readiness_analyzer import build_readiness_dashboard
 from backend.services.retriever import retrieve_chunks_from_records
 
 
-@dataclass
-class StoredQuizRecord:
-    quiz_id: str
-    owner_user_id: str
-    unit_id: Optional[str]
-    payload: GeneratedQuizPayload
-
-
-@dataclass
-class AppStore:
-    workspaces: Dict[str, WorkspaceProfilePayload] = field(default_factory=dict)
-    quizzes: Dict[str, StoredQuizRecord] = field(default_factory=dict)
-    attempts: Dict[str, List[QuizAttemptResult]] = field(default_factory=dict)
-    attempt_entries: List[AttemptRecordEntry] = field(default_factory=list)
-    documents: List[UploadedDocumentSummary] = field(default_factory=list)
-    chunks: List[DocumentChunkRecord] = field(default_factory=list)
+def create_default_repository() -> StudyRepository:
+    database_url = (os.getenv("DATABASE_URL") or "").strip()
+    if database_url:
+        return PostgresRepository(database_url=database_url)
+    return InMemoryRepository()
 
 
 app = FastAPI(title="EduMind AI API")
@@ -75,7 +61,9 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML_FILE = os.path.join(BASE_DIR, "templates", "index.html")
 
-STORE = AppStore()
+REPO: StudyRepository = create_default_repository()
+# Keep STORE referencing REPO when in-memory so existing tests clearing STORE remain compatible.
+STORE = REPO
 AI_PROVIDER: AIProvider = GeminiProvider()
 
 DOC_TEXT = ""
@@ -89,14 +77,15 @@ class LegacyChatRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "phase": 4}
+    backend_mode = "postgres" if isinstance(REPO, PostgresRepository) else "memory"
+    return {"status": "ok", "phase": 4, "storage": backend_mode}
 
 
 @app.get("/api/workspace", response_model=WorkspaceProfilePayload)
 def get_workspace(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> WorkspaceProfilePayload:
-    return STORE.workspaces.get(current_user.user_id) or WorkspaceProfilePayload()
+    return REPO.get_workspace(current_user.user_id)
 
 
 @app.put("/api/workspace", response_model=WorkspaceProfilePayload)
@@ -104,8 +93,7 @@ def upsert_workspace(
     profile: WorkspaceProfilePayload,
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> WorkspaceProfilePayload:
-    STORE.workspaces[current_user.user_id] = profile
-    return profile
+    return REPO.upsert_workspace(current_user.user_id, profile)
 
 
 @app.post(
@@ -162,9 +150,11 @@ async def upload_unit_document(
         extracted_chars=total_chars,
         chunk_count=len(chunk_records),
     )
-    STORE.documents.append(summary)
-    STORE.chunks.extend(chunk_records)
-    return summary
+    return REPO.save_document_with_chunks(
+        user_id=current_user.user_id,
+        summary=summary,
+        chunks=chunk_records,
+    )
 
 
 @app.get(
@@ -176,11 +166,7 @@ def list_unit_documents(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> List[UploadedDocumentSummary]:
     normalized_unit = unit_id.strip() or "general"
-    return [
-        doc
-        for doc in STORE.documents
-        if doc.user_id == current_user.user_id and doc.unit_id == normalized_unit
-    ]
+    return REPO.list_documents(user_id=current_user.user_id, unit_id=normalized_unit)
 
 
 @app.post(
@@ -193,8 +179,13 @@ def retrieve_unit_chunks(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> RetrieveResponse:
     normalized_unit = unit_id.strip() or "general"
+    scoped_chunks = REPO.list_chunks(
+        user_id=current_user.user_id,
+        unit_id=normalized_unit,
+        category=req.category,
+    )
     matches = retrieve_chunks_from_records(
-        STORE.chunks,
+        scoped_chunks,
         user_id=current_user.user_id,
         unit_id=normalized_unit,
         query=req.query,
@@ -217,11 +208,21 @@ def analyze_past_papers_endpoint(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> PastPaperInsightsResponse:
     normalized_unit = unit_id.strip() or "general"
-    return analyze_unit_past_papers(
-        STORE.chunks,
+    scoped_chunks = REPO.list_chunks(
         user_id=current_user.user_id,
         unit_id=normalized_unit,
     )
+    insights = analyze_unit_past_papers(
+        scoped_chunks,
+        user_id=current_user.user_id,
+        unit_id=normalized_unit,
+    )
+    REPO.save_past_paper_insights(
+        user_id=current_user.user_id,
+        unit_id=normalized_unit,
+        insights=insights,
+    )
+    return insights
 
 
 @app.get(
@@ -233,8 +234,18 @@ def get_past_paper_insights_endpoint(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> PastPaperInsightsResponse:
     normalized_unit = unit_id.strip() or "general"
+    saved = REPO.get_saved_past_paper_insights(
+        user_id=current_user.user_id,
+        unit_id=normalized_unit,
+    )
+    if saved is not None:
+        return saved
+    scoped_chunks = REPO.list_chunks(
+        user_id=current_user.user_id,
+        unit_id=normalized_unit,
+    )
     return analyze_unit_past_papers(
-        STORE.chunks,
+        scoped_chunks,
         user_id=current_user.user_id,
         unit_id=normalized_unit,
     )
@@ -253,8 +264,12 @@ def generate_quiz(
     lecture_title = req.lecture_title
 
     if not context_excerpt and req.unit_id:
+        scoped_chunks = REPO.list_chunks(
+            user_id=current_user.user_id,
+            unit_id=req.unit_id,
+        )
         retrieved = retrieve_chunks_from_records(
-            STORE.chunks,
+            scoped_chunks,
             user_id=current_user.user_id,
             unit_id=req.unit_id,
             query=req.topic,
@@ -278,9 +293,9 @@ def generate_quiz(
         ) from exc
 
     quiz_id = str(uuid4())
-    STORE.quizzes[quiz_id] = StoredQuizRecord(
+    REPO.save_quiz(
+        user_id=current_user.user_id,
         quiz_id=quiz_id,
-        owner_user_id=current_user.user_id,
         unit_id=req.unit_id,
         payload=generated,
     )
@@ -310,7 +325,7 @@ def submit_quiz(
     submission: QuizSubmitRequest,
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> QuizAttemptResult:
-    record = STORE.quizzes.get(quiz_id)
+    record = REPO.get_quiz(quiz_id)
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
     verify_owner(record.owner_user_id, current_user)
@@ -320,13 +335,10 @@ def submit_quiz(
         questions=record.payload.questions,
         submission=submission,
     )
-    STORE.attempts.setdefault(current_user.user_id, []).append(result)
-    STORE.attempt_entries.append(
-        AttemptRecordEntry(
-            user_id=current_user.user_id,
-            unit_id=record.unit_id,
-            result=result,
-        )
+    REPO.record_attempt(
+        user_id=current_user.user_id,
+        unit_id=record.unit_id,
+        result=result,
     )
     return result
 
@@ -336,11 +348,11 @@ def get_quiz_history(
     unit_id: Optional[str] = Query(default=None),
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> List[QuizHistoryItem]:
+    entries = REPO.list_attempt_entries(user_id=current_user.user_id, unit_id=unit_id)
     dashboard = build_readiness_dashboard(
-        STORE.attempt_entries,
+        entries,
         user_id=current_user.user_id,
         unit_id=unit_id,
-        chunks=STORE.chunks,
     )
     return dashboard.recent_attempts
 
@@ -350,11 +362,13 @@ def get_readiness_dashboard(
     unit_id: Optional[str] = Query(default=None),
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> ReadinessDashboardResponse:
+    entries = REPO.list_attempt_entries(user_id=current_user.user_id, unit_id=unit_id)
+    unit_chunks = REPO.list_chunks(user_id=current_user.user_id, unit_id=unit_id or "general")
     return build_readiness_dashboard(
-        STORE.attempt_entries,
+        entries,
         user_id=current_user.user_id,
         unit_id=unit_id,
-        chunks=STORE.chunks,
+        chunks=unit_chunks,
     )
 
 
