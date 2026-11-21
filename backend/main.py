@@ -22,6 +22,7 @@ from backend.schemas.documents import (
     ScannedPdfErrorDetail,
     UploadedDocumentSummary,
 )
+from backend.schemas.past_papers import PastPaperInsightsResponse
 from backend.schemas.quiz import (
     GeneratedQuizPayload,
     QuizAttemptResult,
@@ -31,6 +32,7 @@ from backend.schemas.quiz import (
     StudentQuizResponse,
     WorkspaceProfilePayload,
 )
+from backend.services.past_paper_analyzer import analyze_unit_past_papers
 from backend.services.pdf_ingestion import (
     ScannedPdfUnsupportedError,
     ingest_pdf_document,
@@ -81,7 +83,7 @@ class LegacyChatRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "phase": 2}
+    return {"status": "ok", "phase": 3}
 
 
 @app.get("/api/workspace", response_model=WorkspaceProfilePayload)
@@ -197,6 +199,38 @@ def retrieve_unit_chunks(
         unit_id=normalized_unit,
         query=req.query,
         results=matches,
+    )
+
+
+@app.post(
+    "/api/units/{unit_id}/past-papers/analyze",
+    response_model=PastPaperInsightsResponse,
+)
+def analyze_past_papers_endpoint(
+    unit_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> PastPaperInsightsResponse:
+    normalized_unit = unit_id.strip() or "general"
+    return analyze_unit_past_papers(
+        STORE.chunks,
+        user_id=current_user.user_id,
+        unit_id=normalized_unit,
+    )
+
+
+@app.get(
+    "/api/units/{unit_id}/past-papers/insights",
+    response_model=PastPaperInsightsResponse,
+)
+def get_past_paper_insights_endpoint(
+    unit_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> PastPaperInsightsResponse:
+    normalized_unit = unit_id.strip() or "general"
+    return analyze_unit_past_papers(
+        STORE.chunks,
+        user_id=current_user.user_id,
+        unit_id=normalized_unit,
     )
 
 
