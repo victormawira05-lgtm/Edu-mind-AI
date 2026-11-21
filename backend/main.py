@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -14,6 +14,14 @@ from pypdf import PdfReader
 from backend.auth import AuthenticatedUser, get_current_user, verify_owner
 from backend.providers.base import AIProvider
 from backend.providers.gemini_provider import GeminiProvider
+from backend.schemas.documents import (
+    DocumentCategory,
+    DocumentChunkRecord,
+    RetrieveRequest,
+    RetrieveResponse,
+    ScannedPdfErrorDetail,
+    UploadedDocumentSummary,
+)
 from backend.schemas.quiz import (
     GeneratedQuizPayload,
     QuizAttemptResult,
@@ -23,7 +31,12 @@ from backend.schemas.quiz import (
     StudentQuizResponse,
     WorkspaceProfilePayload,
 )
+from backend.services.pdf_ingestion import (
+    ScannedPdfUnsupportedError,
+    ingest_pdf_document,
+)
 from backend.services.quiz_grader import grade_quiz_submission
+from backend.services.retriever import retrieve_chunks_from_records
 
 
 @dataclass
@@ -39,6 +52,8 @@ class AppStore:
     workspaces: Dict[str, WorkspaceProfilePayload] = field(default_factory=dict)
     quizzes: Dict[str, StoredQuizRecord] = field(default_factory=dict)
     attempts: Dict[str, List[QuizAttemptResult]] = field(default_factory=dict)
+    documents: List[UploadedDocumentSummary] = field(default_factory=list)
+    chunks: List[DocumentChunkRecord] = field(default_factory=list)
 
 
 app = FastAPI(title="EduMind AI API")
@@ -55,7 +70,6 @@ HTML_FILE = os.path.join(BASE_DIR, "templates", "index.html")
 STORE = AppStore()
 AI_PROVIDER: AIProvider = GeminiProvider()
 
-# Baseline compatibility state for legacy local routes
 DOC_TEXT = ""
 DOC_NAME = ""
 DOC_LINES = []
@@ -67,7 +81,7 @@ class LegacyChatRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "phase": 1}
+    return {"status": "ok", "phase": 2}
 
 
 @app.get("/api/workspace", response_model=WorkspaceProfilePayload)
@@ -87,6 +101,106 @@ def upsert_workspace(
 
 
 @app.post(
+    "/api/units/{unit_id}/documents",
+    response_model=UploadedDocumentSummary,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_unit_document(
+    unit_id: str,
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(default=None),
+    category: DocumentCategory = Form(default=DocumentCategory.LECTURE_NOTES),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> UploadedDocumentSummary:
+    normalized_unit = unit_id.strip() or "general"
+    filename = file.filename or "document.pdf"
+    doc_title = (title or "").strip() or filename
+
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF files are currently supported.",
+        )
+
+    pdf_bytes = await file.read()
+    try:
+        doc_id, page_count, total_chars, chunk_records = ingest_pdf_document(
+            pdf_bytes=pdf_bytes,
+            filename=filename,
+            title=doc_title,
+            category=category,
+            unit_id=normalized_unit,
+            user_id=current_user.user_id,
+        )
+    except ScannedPdfUnsupportedError as exc:
+        detail = ScannedPdfErrorDetail(
+            filename=exc.filename,
+            page_count=exc.page_count,
+            message=exc.message,
+        ).model_dump()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=detail,
+        ) from exc
+
+    summary = UploadedDocumentSummary(
+        document_id=doc_id,
+        user_id=current_user.user_id,
+        unit_id=normalized_unit,
+        title=doc_title,
+        filename=filename,
+        category=category,
+        page_count=page_count,
+        extracted_chars=total_chars,
+        chunk_count=len(chunk_records),
+    )
+    STORE.documents.append(summary)
+    STORE.chunks.extend(chunk_records)
+    return summary
+
+
+@app.get(
+    "/api/units/{unit_id}/documents",
+    response_model=List[UploadedDocumentSummary],
+)
+def list_unit_documents(
+    unit_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> List[UploadedDocumentSummary]:
+    normalized_unit = unit_id.strip() or "general"
+    return [
+        doc
+        for doc in STORE.documents
+        if doc.user_id == current_user.user_id and doc.unit_id == normalized_unit
+    ]
+
+
+@app.post(
+    "/api/units/{unit_id}/retrieve",
+    response_model=RetrieveResponse,
+)
+def retrieve_unit_chunks(
+    unit_id: str,
+    req: RetrieveRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> RetrieveResponse:
+    normalized_unit = unit_id.strip() or "general"
+    matches = retrieve_chunks_from_records(
+        STORE.chunks,
+        user_id=current_user.user_id,
+        unit_id=normalized_unit,
+        query=req.query,
+        top_k=req.top_k,
+        category=req.category,
+    )
+    return RetrieveResponse(
+        unit_id=normalized_unit,
+        query=req.query,
+        results=matches,
+    )
+
+
+@app.post(
     "/api/quizzes/generate",
     response_model=StudentQuizResponse,
     status_code=status.HTTP_201_CREATED,
@@ -95,12 +209,27 @@ def generate_quiz(
     req: QuizGenerateRequest,
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> StudentQuizResponse:
+    context_excerpt = req.context_excerpt
+    lecture_title = req.lecture_title
+
+    if not context_excerpt and req.unit_id:
+        retrieved = retrieve_chunks_from_records(
+            STORE.chunks,
+            user_id=current_user.user_id,
+            unit_id=req.unit_id,
+            query=req.topic,
+            top_k=3,
+        )
+        if retrieved:
+            context_excerpt = "\n\n".join(item.content for item in retrieved)
+            lecture_title = lecture_title or retrieved[0].source.document_title
+
     try:
         generated = AI_PROVIDER.generate_quiz(
             topic=req.topic.strip(),
             num_questions=req.num_questions,
-            context_excerpt=req.context_excerpt,
-            lecture_title=req.lecture_title,
+            context_excerpt=context_excerpt,
+            lecture_title=lecture_title,
         )
     except Exception as exc:
         raise HTTPException(
@@ -116,7 +245,6 @@ def generate_quiz(
         payload=generated,
     )
 
-    # Strip correct_option_index before returning quiz to student client
     student_questions = [
         StudentQuizQuestion(
             id=q.id,
@@ -144,13 +272,8 @@ def submit_quiz(
 ) -> QuizAttemptResult:
     record = STORE.quizzes.get(quiz_id)
     if not record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Quiz not found.",
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
     verify_owner(record.owner_user_id, current_user)
-
     result = grade_quiz_submission(
         quiz_id=record.quiz_id,
         title=record.payload.title,
@@ -161,23 +284,6 @@ def submit_quiz(
     return result
 
 
-@app.get("/api/quizzes/{quiz_id}/attempts", response_model=List[QuizAttemptResult])
-def list_quiz_attempts(
-    quiz_id: str,
-    current_user: AuthenticatedUser = Depends(get_current_user),
-) -> List[QuizAttemptResult]:
-    record = STORE.quizzes.get(quiz_id)
-    if not record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Quiz not found.",
-        )
-    verify_owner(record.owner_user_id, current_user)
-    user_attempts = STORE.attempts.get(current_user.user_id, [])
-    return [a for a in user_attempts if a.quiz_id == quiz_id]
-
-
-# --- Baseline compatibility endpoints ---
 @app.get("/")
 def home():
     if os.path.exists(HTML_FILE):
