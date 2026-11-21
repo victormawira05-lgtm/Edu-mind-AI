@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -32,12 +32,17 @@ from backend.schemas.quiz import (
     StudentQuizResponse,
     WorkspaceProfilePayload,
 )
+from backend.schemas.readiness import QuizHistoryItem, ReadinessDashboardResponse
 from backend.services.past_paper_analyzer import analyze_unit_past_papers
 from backend.services.pdf_ingestion import (
     ScannedPdfUnsupportedError,
     ingest_pdf_document,
 )
 from backend.services.quiz_grader import grade_quiz_submission
+from backend.services.readiness_analyzer import (
+    AttemptRecordEntry,
+    build_readiness_dashboard,
+)
 from backend.services.retriever import retrieve_chunks_from_records
 
 
@@ -54,6 +59,7 @@ class AppStore:
     workspaces: Dict[str, WorkspaceProfilePayload] = field(default_factory=dict)
     quizzes: Dict[str, StoredQuizRecord] = field(default_factory=dict)
     attempts: Dict[str, List[QuizAttemptResult]] = field(default_factory=dict)
+    attempt_entries: List[AttemptRecordEntry] = field(default_factory=list)
     documents: List[UploadedDocumentSummary] = field(default_factory=list)
     chunks: List[DocumentChunkRecord] = field(default_factory=list)
 
@@ -83,7 +89,7 @@ class LegacyChatRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "phase": 3}
+    return {"status": "ok", "phase": 4}
 
 
 @app.get("/api/workspace", response_model=WorkspaceProfilePayload)
@@ -141,7 +147,7 @@ async def upload_unit_document(
             message=exc.message,
         ).model_dump()
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=detail,
         ) from exc
 
@@ -315,7 +321,41 @@ def submit_quiz(
         submission=submission,
     )
     STORE.attempts.setdefault(current_user.user_id, []).append(result)
+    STORE.attempt_entries.append(
+        AttemptRecordEntry(
+            user_id=current_user.user_id,
+            unit_id=record.unit_id,
+            result=result,
+        )
+    )
     return result
+
+
+@app.get("/api/quizzes/history", response_model=List[QuizHistoryItem])
+def get_quiz_history(
+    unit_id: Optional[str] = Query(default=None),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> List[QuizHistoryItem]:
+    dashboard = build_readiness_dashboard(
+        STORE.attempt_entries,
+        user_id=current_user.user_id,
+        unit_id=unit_id,
+        chunks=STORE.chunks,
+    )
+    return dashboard.recent_attempts
+
+
+@app.get("/api/readiness", response_model=ReadinessDashboardResponse)
+def get_readiness_dashboard(
+    unit_id: Optional[str] = Query(default=None),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> ReadinessDashboardResponse:
+    return build_readiness_dashboard(
+        STORE.attempt_entries,
+        user_id=current_user.user_id,
+        unit_id=unit_id,
+        chunks=STORE.chunks,
+    )
 
 
 @app.get("/")
