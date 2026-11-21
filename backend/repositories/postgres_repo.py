@@ -318,10 +318,10 @@ class PostgresRepository(StudyRepository):
             )
             answer_rows = cur.fetchall()
 
-        answers_by_attempt: Dict[str, List[QuestionGradeResult]] = {}
+        answers_by_attempt: Dict[str, List[GradedQuestionResult]] = {}
         for a in answer_rows:
             answers_by_attempt.setdefault(a["attempt_id"], []).append(
-                QuestionGradeResult(
+                GradedQuestionResult(
                     question_id=a["question_id"],
                     is_correct=bool(a["is_correct"]),
                     selected_option_index=0,
@@ -537,4 +537,7 @@ class PostgresRepository(StudyRepository):
             recurrence=recurrence,
             disclaimer=NON_GUARANTEE_DISCLAIMER,
         )
+
+
+
 
