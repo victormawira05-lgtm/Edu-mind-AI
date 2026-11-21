@@ -1,5 +1,9 @@
-fastapi
-uvicorn
+﻿fastapi
+uvicorn[standard]
 python-multipart
 pypdf
 google-genai
+python-dotenv
+supabase
+python-jose[cryptography]
+psycopg[binary]
