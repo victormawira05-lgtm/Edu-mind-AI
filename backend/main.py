@@ -1,161 +1,234 @@
-# backend/main.py
-import os, io, uuid
-from datetime import datetime
-from dotenv import load_dotenv
-load_dotenv()
+from __future__ import annotations
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+import os
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional
+from uuid import uuid4
+
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-import PyPDF2
-from google import genai as google_genai
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from pypdf import PdfReader
 
-from backend.auth import supabase, get_current_user
+from backend.auth import AuthenticatedUser, get_current_user, verify_owner
+from backend.providers.base import AIProvider
+from backend.providers.gemini_provider import GeminiProvider
+from backend.schemas.quiz import (
+    GeneratedQuizPayload,
+    QuizAttemptResult,
+    QuizGenerateRequest,
+    QuizSubmitRequest,
+    StudentQuizQuestion,
+    StudentQuizResponse,
+    WorkspaceProfilePayload,
+)
+from backend.services.quiz_grader import grade_quiz_submission
 
-app = FastAPI(title="EduMind AI", version="2.1")
 
-# Tightened CORS - Phase 1
+@dataclass
+class StoredQuizRecord:
+    quiz_id: str
+    owner_user_id: str
+    unit_id: Optional[str]
+    payload: GeneratedQuizPayload
+
+
+@dataclass
+class AppStore:
+    workspaces: Dict[str, WorkspaceProfilePayload] = field(default_factory=dict)
+    quizzes: Dict[str, StoredQuizRecord] = field(default_factory=dict)
+    attempts: Dict[str, List[QuizAttemptResult]] = field(default_factory=dict)
+
+
+app = FastAPI(title="EduMind AI API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:8000", "http://localhost:8000"],
-    allow_credentials=True,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-client = google_genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+HTML_FILE = os.path.join(BASE_DIR, "templates", "index.html")
 
-MODEL_LIST = [
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-3.5-flash-lite",
-    "gemma-3-27b-it",
-]
+STORE = AppStore()
+AI_PROVIDER: AIProvider = GeminiProvider()
 
-def extract_text_from_pdf(file_bytes):
-    pdf = PyPDF2.PdfReader(io.BytesIO(file_bytes))
-    text = ""
-    for page in pdf.pages[:10]:
-        text += (page.extract_text() or "") + "\n"
-    return text[:15000]
+# Baseline compatibility state for legacy local routes
+DOC_TEXT = ""
+DOC_NAME = ""
+DOC_LINES = []
 
-def gemini_generate(prompt: str):
-    if not client:
-        raise Exception("GEMINI_API_KEY not set")
-    last_err = None
-    for model_id in MODEL_LIST:
-        try:
-            resp = client.models.generate_content(model=model_id, contents=prompt)
-            print(f"Used model: {model_id}")
-            return resp.text
-        except Exception as e:
-            print(f"Fail {model_id}: {e}")
-            last_err = e
-            continue
-    raise HTTPException(500, f"All models failed. Last error: {last_err}")
 
-def chunk_text(text: str, size=3000):
-    return [text[i:i+size] for i in range(0, len(text), size)]
+class LegacyChatRequest(BaseModel):
+    question: str = ""
 
-HTML_PAGE = """<!DOCTYPE html>
-<html><head><meta name="viewport" content="width=device-width">
-<title>EduMind AI - Phase 1</title>
-<style>body{font-family:system-ui;padding:20px;max-width:600px;margin:auto;background:#f8fafc}input,button{width:100%;padding:10px;margin:6px 0}button{background:#2563eb;color:white;border:0;border-radius:8px}</style>
-</head><body>
-<h2>EduMind AI - Login Required</h2>
-<p>1. Get token from Supabase Auth (use Supabase Dashboard > Authentication > Add User, then login via API) or paste JWT below.</p>
-<input id="token" placeholder="Paste Supabase JWT Bearer token">
-<input id="pdf" type="file" accept=".pdf">
-<button onclick="upload()">Upload + Summarize</button>
-<pre id="out"></pre>
-<input id="docId" placeholder="Document UUID">
-<input id="question" placeholder="What is photosynthesis?">
-<button onclick="ask()">Ask</button>
-<button onclick="quiz()">Quiz (5)</button>
-<script>
-async function upload(){
-  const token=document.getElementById('token').value;
-  const f=document.getElementById('pdf').files[0];
-  const fd=new FormData(); fd.append('file',f);
-  const r=await fetch('/upload',{method:'POST',headers:{Authorization:'Bearer '+token},body:fd});
-  document.getElementById('out').innerText=await r.text();
-}
-async function ask(){
-  const token=document.getElementById('token').value;
-  const fd=new FormData(); fd.append('doc_id',document.getElementById('docId').value); fd.append('question',document.getElementById('question').value);
-  const r=await fetch('/ask',{method:'POST',headers:{Authorization:'Bearer '+token},body:fd});
-  document.getElementById('out').innerText=await r.text();
-}
-async function quiz(){
-  const token=document.getElementById('token').value;
-  const fd=new FormData(); fd.append('doc_id',document.getElementById('docId').value); fd.append('num',5);
-  const r=await fetch('/quiz',{method:'POST',headers:{Authorization:'Bearer '+token},body:fd});
-  document.getElementById('out').innerText=await r.text();
-}
-</script></body></html>"""
 
-@app.get("/", response_class=HTMLResponse)
-def home():
-    return HTML_PAGE
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok", "phase": 1}
 
-@app.post("/upload")
-async def upload(file: UploadFile = File(...), user=Depends(get_current_user)):
-    user_id = user.id
-    file_bytes = await file.read()
-    text = extract_text_from_pdf(file_bytes)
-    if not text.strip():
-        raise HTTPException(400, "No text extracted from PDF")
 
-    doc_id = str(uuid.uuid4())
-    storage_path = f"{user_id}/{doc_id}.pdf"
+@app.get("/api/workspace", response_model=WorkspaceProfilePayload)
+def get_workspace(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> WorkspaceProfilePayload:
+    return STORE.workspaces.get(current_user.user_id) or WorkspaceProfilePayload()
 
-    # 1. Upload to Storage (private bucket, user_id/ folder)
-    supabase.storage.from_("pdfs").upload(
-        path=storage_path,
-        file=file_bytes,
-        file_options={"content-type": "application/pdf", "upsert": "true"}
+
+@app.put("/api/workspace", response_model=WorkspaceProfilePayload)
+def upsert_workspace(
+    profile: WorkspaceProfilePayload,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> WorkspaceProfilePayload:
+    STORE.workspaces[current_user.user_id] = profile
+    return profile
+
+
+@app.post(
+    "/api/quizzes/generate",
+    response_model=StudentQuizResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def generate_quiz(
+    req: QuizGenerateRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> StudentQuizResponse:
+    try:
+        generated = AI_PROVIDER.generate_quiz(
+            topic=req.topic.strip(),
+            num_questions=req.num_questions,
+            context_excerpt=req.context_excerpt,
+            lecture_title=req.lecture_title,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to generate valid structured quiz: {exc}",
+        ) from exc
+
+    quiz_id = str(uuid4())
+    STORE.quizzes[quiz_id] = StoredQuizRecord(
+        quiz_id=quiz_id,
+        owner_user_id=current_user.user_id,
+        unit_id=req.unit_id,
+        payload=generated,
     )
 
-    # 2. Summarize
-    summary = gemini_generate(f"Summarize in 5 bullets simple English + 1 line Swahili:\n{text[:8000]}")
+    # Strip correct_option_index before returning quiz to student client
+    student_questions = [
+        StudentQuizQuestion(
+            id=q.id,
+            prompt=q.prompt,
+            options=q.options,
+            topic=q.topic,
+            lecture_reference=q.lecture_reference,
+        )
+        for q in generated.questions
+    ]
 
-    # 3. Save to DB
-    supabase.table("documents").insert({
-        "id": doc_id, "user_id": user_id,
-        "title": file.filename, "file_path": storage_path,
-        "summary": summary
-    }).execute()
+    return StudentQuizResponse(
+        quiz_id=quiz_id,
+        title=generated.title,
+        unit_id=req.unit_id,
+        questions=student_questions,
+    )
 
-    # 4. Save chunks
-    chunks = [{"document_id": doc_id, "user_id": user_id, "content": c, "chunk_index": i}
-              for i, c in enumerate(chunk_text(text))]
-    supabase.table("chunks").insert(chunks).execute()
 
-    return {"doc_id": doc_id, "title": file.filename, "summary": summary}
+@app.post("/api/quizzes/{quiz_id}/submit", response_model=QuizAttemptResult)
+def submit_quiz(
+    quiz_id: str,
+    submission: QuizSubmitRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> QuizAttemptResult:
+    record = STORE.quizzes.get(quiz_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quiz not found.",
+        )
 
-@app.post("/ask")
-async def ask(doc_id: str = Form(...), question: str = Form(...), user=Depends(get_current_user)):
-    # Only own doc
-    doc = supabase.table("documents").select("*").eq("id", doc_id).eq("user_id", user.id).single().execute()
-    if not doc.data:
-        raise HTTPException(404, "Doc not found or not yours")
-    chunks = supabase.table("chunks").select("content").eq("document_id", doc_id).eq("user_id", user.id).order("chunk_index").execute()
-    context = "\n".join([c["content"] for c in chunks.data])[:10000]
-    ans = gemini_generate(f"Answer ONLY from notes. Notes:{context}\nQ:{question}\nEnglish + 1 line Swahili:")
-    return {"answer": ans}
+    verify_owner(record.owner_user_id, current_user)
 
-@app.post("/quiz")
-async def quiz(doc_id: str = Form(...), num: int = Form(5), user=Depends(get_current_user)):
-    doc = supabase.table("documents").select("*").eq("id", doc_id).eq("user_id", user.id).single().execute()
-    if not doc.data:
-        raise HTTPException(404, "Doc not found or not yours")
-    chunks = supabase.table("chunks").select("content").eq("document_id", doc_id).eq("user_id", user.id).order("chunk_index").execute()
-    context = "\n".join([c["content"] for c in chunks.data])[:8000]
-    q = gemini_generate(f"Create {num} MCQs JSON [{{q,options[4],answer}}]:\n{context}")
-    return {"quiz": q}
+    result = grade_quiz_submission(
+        quiz_id=record.quiz_id,
+        title=record.payload.title,
+        questions=record.payload.questions,
+        submission=submission,
+    )
+    STORE.attempts.setdefault(current_user.user_id, []).append(result)
+    return result
 
-@app.get("/my-docs")
-async def my_docs(user=Depends(get_current_user)):
-    res = supabase.table("documents").select("id,title,summary,created_at").eq("user_id", user.id).order("created_at", desc=True).execute()
-    return res.data
+
+@app.get("/api/quizzes/{quiz_id}/attempts", response_model=List[QuizAttemptResult])
+def list_quiz_attempts(
+    quiz_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> List[QuizAttemptResult]:
+    record = STORE.quizzes.get(quiz_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quiz not found.",
+        )
+    verify_owner(record.owner_user_id, current_user)
+    user_attempts = STORE.attempts.get(current_user.user_id, [])
+    return [a for a in user_attempts if a.quiz_id == quiz_id]
+
+
+# --- Baseline compatibility endpoints ---
+@app.get("/")
+def home():
+    if os.path.exists(HTML_FILE):
+        return FileResponse(HTML_FILE)
+    return {"message": "EduMind AI backend running"}
+
+
+@app.get("/context")
+def get_context():
+    key_exists = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    return {
+        "loaded": bool(DOC_TEXT),
+        "filename": DOC_NAME,
+        "chars": len(DOC_TEXT),
+        "has_key": key_exists,
+    }
+
+
+@app.post("/upload-pdf")
+async def upload_pdf(file: UploadFile = File(...)):
+    global DOC_TEXT, DOC_NAME, DOC_LINES
+    reader = PdfReader(file.file)
+    text = ""
+    for page in reader.pages:
+        extracted = page.extract_text()
+        if extracted:
+            text += extracted + "\n"
+    DOC_TEXT = text
+    DOC_LINES = [line for line in text.split("\n") if line.strip()]
+    DOC_NAME = file.filename or "uploaded.pdf"
+    return {
+        "status": "ok",
+        "filename": DOC_NAME,
+        "pages": len(reader.pages),
+        "chars": len(DOC_TEXT),
+    }
+
+
+@app.post("/chat")
+async def chat(data: LegacyChatRequest):
+    q = data.question.strip()
+    if not DOC_TEXT:
+        return {"answer": "Please upload PDF first."}
+    q_words = [w for w in q.lower().split() if len(w) > 3]
+    relevant_lines = []
+    char_count = 0
+    for line in DOC_LINES:
+        if any(w in line.lower() for w in q_words):
+            relevant_lines.append(line)
+            char_count += len(line) + 1
+            if char_count > 3000:
+                break
+    ctx = "\n".join(relevant_lines) if relevant_lines else DOC_TEXT[:3500]
+    return {"answer": AI_PROVIDER.generate_answer(prompt=q, context=ctx)}
