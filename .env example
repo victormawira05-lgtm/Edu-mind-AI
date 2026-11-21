@@ -1,0 +1,30 @@
+# ==============================================================================
+# EduMind AI — Environment Template (Placeholders Only — No Real Secrets)
+# Copy this file to `.env` (or split into backend/.env and frontend/.env)
+# and populate local/staging values before connecting live services.
+# ==============================================================================
+
+# --- Backend: FastAPI & Application Settings ---
+APP_ENV=development
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+
+# --- Backend: Supabase Auth & PostgreSQL Persistence ---
+# Found in Supabase Dashboard -> Project Settings -> API -> JWT Settings
+SUPABASE_JWT_SECRET=replace-with-your-supabase-jwt-secret
+
+# Prefer Supabase Transaction Pooler (port 6543) with sslmode=require for app runtime
+DATABASE_URL=postgresql://postgres.<project-ref>:<db-password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require
+
+# Local-only dev auth bypass flag; keep false/unset outside local test/dev runs
+ALLOW_DEV_AUTH_BYPASS=false
+
+# --- Backend: Gemini AI Provider ---
+GEMINI_API_KEY=replace-with-your-gemini-api-key
+GEMINI_PRIMARY_MODEL=gemini-2.5-flash
+GEMINI_FALLBACK_MODEL=gemini-2.0-flash
+
+# --- Frontend: Vite Public Variables (Safe for Client Bundle) ---
+# Do NOT put SUPABASE_JWT_SECRET, database passwords, or service/secret keys here
+VITE_API_BASE_URL=http://127.0.0.1:8000
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=replace-with-your-supabase-anon-key
