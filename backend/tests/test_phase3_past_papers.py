@@ -1,4 +1,4 @@
-from fastapi.testclient import TestClient
+﻿from fastapi.testclient import TestClient
 
 from backend import main as backend_main
 from backend.schemas.documents import (
@@ -119,7 +119,6 @@ def test_past_paper_extraction_recurrence_evidence_and_disclaimer(monkeypatch):
     assert len(body["extracted_questions"]) == 2
     assert "does not guarantee" in body["disclaimer"].lower()
 
-    # Every extracted question carries verifiable source evidence
     for q in body["extracted_questions"]:
         ev = q["source_evidence"]
         assert ev["document_title"]
@@ -127,7 +126,6 @@ def test_past_paper_extraction_recurrence_evidence_and_disclaimer(monkeypatch):
         assert ev["chunk_id"]
         assert ev["excerpt"]
 
-    # Recurrence entries include evidence pointers and linked lecture notes
     assert len(body["recurrence"]) >= 1
     top_rec = body["recurrence"][0]
     assert top_rec["occurrence_count"] == 2

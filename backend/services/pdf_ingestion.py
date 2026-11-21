@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import io
 from typing import List, Tuple
@@ -18,8 +18,6 @@ MIN_EXTRACTABLE_CHARS = 25
 
 
 class ScannedPdfUnsupportedError(Exception):
-    """Raised when a PDF has insufficient extractable text and requires OCR."""
-
     def __init__(self, filename: str, page_count: int, message: str = SCANNED_PDF_MESSAGE) -> None:
         super().__init__(message)
         self.filename = filename
@@ -28,7 +26,6 @@ class ScannedPdfUnsupportedError(Exception):
 
 
 def extract_pdf_pages(pdf_bytes: bytes) -> Tuple[int, List[Tuple[int, str]]]:
-    """Extract (page_number, cleaned_text) pairs from raw PDF bytes."""
     reader = PdfReader(io.BytesIO(pdf_bytes))
     page_count = len(reader.pages)
     pages: List[Tuple[int, str]] = []
@@ -48,7 +45,6 @@ def chunk_page_text(
     chunk_size: int = 700,
     overlap: int = 100,
 ) -> List[str]:
-    """Split text into bounded overlapping chunks without splitting words awkwardly."""
     if not text:
         return []
     if len(text) <= chunk_size:
@@ -85,10 +81,6 @@ def ingest_pdf_document(
     chunk_size: int = 700,
     overlap: int = 100,
 ) -> Tuple[str, int, int, List[DocumentChunkRecord]]:
-    """
-    Validate text extractability (rejecting scanned/empty PDFs clearly until OCR is added)
-    and produce chunk records carrying full source metadata.
-    """
     page_count, pages = extract_pdf_pages(pdf_bytes)
     total_chars = sum(len(t) for _, t in pages)
 

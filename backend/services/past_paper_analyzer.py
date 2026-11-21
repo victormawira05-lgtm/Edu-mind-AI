@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from typing import Dict, Iterable, List, Set
@@ -63,13 +63,11 @@ def _classify_topic(text: str, lecture_chunks: List[DocumentChunkRecord]) -> str
         overlap = len(q_tokens & l_tokens)
         if overlap > best_overlap:
             best_overlap = overlap
-            # Derive a concise topic label from the lecture title or first significant tokens
             best_topic = l_chunk.document_title
 
     if best_topic and best_overlap >= 2:
         return best_topic
 
-    # Fallback keyword topic extraction
     known_keywords = [
         ("derivative", "Derivatives & Rates of Change"),
         ("differentiate", "Derivatives & Rates of Change"),
@@ -131,11 +129,6 @@ def analyze_unit_past_papers(
     user_id: str,
     unit_id: str,
 ) -> PastPaperInsightsResponse:
-    """
-    Extract questions from uploaded past_paper chunks for user_id + unit_id,
-    classify topic and question type, link to lecture_notes chunks with verifiable
-    evidence, and summarize observed recurrence without guaranteeing future exams.
-    """
     scoped_chunks = [c for c in chunks if c.user_id == user_id and c.unit_id == unit_id]
     past_paper_chunks = [c for c in scoped_chunks if c.category == DocumentCategory.PAST_PAPER]
     lecture_chunks = [c for c in scoped_chunks if c.category == DocumentCategory.LECTURE_NOTES]

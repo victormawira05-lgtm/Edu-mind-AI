@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -27,7 +27,6 @@ class StoredQuizRecord:
 
 
 class StudyRepository(ABC):
-    # Workspace (P1)
     @abstractmethod
     def get_workspace(self, user_id: str) -> WorkspaceProfilePayload: ...
 
@@ -36,7 +35,6 @@ class StudyRepository(ABC):
         self, user_id: str, profile: WorkspaceProfilePayload
     ) -> WorkspaceProfilePayload: ...
 
-    # Documents & Chunks (P2)
     @abstractmethod
     def save_document_with_chunks(
         self,
@@ -58,7 +56,6 @@ class StudyRepository(ABC):
         category: Optional[DocumentCategory] = None,
     ) -> List[DocumentChunkRecord]: ...
 
-    # Quizzes & Attempts (P1 & P4)
     @abstractmethod
     def save_quiz(
         self,
@@ -84,7 +81,6 @@ class StudyRepository(ABC):
         self, user_id: str, unit_id: Optional[str] = None
     ) -> List[AttemptRecordEntry]: ...
 
-    # Past-Paper Insights (P3)
     @abstractmethod
     def save_past_paper_insights(
         self, user_id: str, unit_id: str, insights: PastPaperInsightsResponse

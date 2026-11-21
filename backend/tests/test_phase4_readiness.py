@@ -1,4 +1,4 @@
-from fastapi.testclient import TestClient
+﻿from fastapi.testclient import TestClient
 
 from backend import main as backend_main
 from backend.providers.base import AIProvider
@@ -79,8 +79,6 @@ def test_readiness_separates_demonstrated_vs_insufficient_evidence_and_history(m
     assert gen_res.status_code == 201
     quiz_id = gen_res.json()["quiz_id"]
 
-    # Derivatives: 1/3 correct (33.33% -> demonstrated weak topic since >= 3 questions)
-    # Integrals: 1/1 correct (100% -> insufficient_evidence since < 3 questions)
     sub_res = client.post(
         f"/api/quizzes/{quiz_id}/submit",
         headers=headers,
@@ -110,12 +108,10 @@ def test_readiness_separates_demonstrated_vs_insufficient_evidence_and_history(m
     assert insuff_names == ["Integrals"]
     assert dash["insufficient_evidence_topics"][0]["evidence_status"] == "insufficient_evidence"
 
-    # High-priority recommendation should target Derivatives (demonstrated weak topic)
     assert len(dash["recommendations"]) == 2
     assert dash["recommendations"][0]["topic"] == "Derivatives"
     assert dash["recommendations"][0]["priority"] == "high"
 
-    # Quiz history endpoint returns only student-alice's attempts
     hist_res = client.get("/api/quizzes/history", headers=headers)
     assert hist_res.status_code == 200
     assert len(hist_res.json()) == 1

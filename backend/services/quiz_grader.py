@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Dict, List
 from uuid import uuid4
@@ -18,14 +18,9 @@ def grade_quiz_submission(
     questions: List[GeneratedQuizItem],
     submission: QuizSubmitRequest,
 ) -> QuizAttemptResult:
-    """
-    Deterministically grade a student's quiz submission against the stored answer key.
-    AI is never invoked during grading.
-    """
     selected_by_qid: Dict[str, int] = {
         ans.question_id: ans.selected_option_index for ans in submission.answers
     }
-
     graded_items: List[GradedQuestionResult] = []
     correct_count = 0
 
@@ -38,7 +33,6 @@ def grade_quiz_submission(
         )
         if is_correct:
             correct_count += 1
-
         graded_items.append(
             GradedQuestionResult(
                 question_id=q.id,
@@ -55,7 +49,6 @@ def grade_quiz_submission(
 
     total = len(questions)
     percentage = round((correct_count / total) * 100.0, 2) if total > 0 else 0.0
-
     return QuizAttemptResult(
         attempt_id=str(uuid4()),
         quiz_id=quiz_id,

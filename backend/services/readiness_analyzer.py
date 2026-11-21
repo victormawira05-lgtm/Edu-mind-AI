@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -55,18 +55,12 @@ def build_readiness_dashboard(
     chunks: Iterable[DocumentChunkRecord] = (),
     min_evidence_questions: int = MIN_EVIDENCE_QUESTIONS,
 ) -> ReadinessDashboardResponse:
-    """
-    Aggregate quiz attempts for user_id (optionally filtered by unit_id),
-    explicitly separating topics with demonstrated performance from topics
-    with insufficient evidence.
-    """
     scoped: List[AttemptRecordEntry] = [
         e
         for e in entries
         if e.user_id == user_id and (unit_id is None or e.unit_id == unit_id)
     ]
 
-    # (topic, entry_unit_id) -> [answered, correct]
     topic_stats: Dict[Tuple[str, Optional[str]], List[int]] = {}
     recent_attempts: List[QuizHistoryItem] = []
 

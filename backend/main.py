@@ -1,4 +1,6 @@
-from __future__ import annotations
+﻿from __future__ import annotations
+
+from backend.cors_config import get_allowed_origins
 
 import os
 from typing import List, Optional
@@ -53,7 +55,7 @@ def create_default_repository() -> StudyRepository:
 app = FastAPI(title="EduMind AI API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=get_allowed_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -62,7 +64,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML_FILE = os.path.join(BASE_DIR, "templates", "index.html")
 
 REPO: StudyRepository = create_default_repository()
-# Keep STORE referencing REPO when in-memory so existing tests clearing STORE remain compatible.
 STORE = REPO
 AI_PROVIDER: AIProvider = GeminiProvider()
 
@@ -426,3 +427,4 @@ async def chat(data: LegacyChatRequest):
                 break
     ctx = "\n".join(relevant_lines) if relevant_lines else DOC_TEXT[:3500]
     return {"answer": AI_PROVIDER.generate_answer(prompt=q, context=ctx)}
+
