@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import os
@@ -144,4 +144,11 @@ class GeminiProvider(AIProvider):
             "You are EduMind AI, a supportive study tutor. Answer clearly using bullet points "
             f"and step-by-step reasoning.\nContext:\n{context[:3500]}\n\nQuestion: {prompt}"
         )
-        return self._call_models(full_prompt, json_mode=False)
+        try:
+            return self._call_models(full_prompt, json_mode=False)
+        except Exception:
+            excerpt = " ".join(context[:600].split())
+            return (
+                f"Study notes summary for '{prompt}' (fallback mode while AI service is unavailable):\n"
+                f"- Key excerpt from uploaded material: {excerpt}"
+            )
