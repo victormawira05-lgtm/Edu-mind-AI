@@ -411,7 +411,7 @@ async def upload_pdf(file: UploadFile = File(...)):
     }
 
 
-def _chunk_text_for_summary(text: str, chunk_size: int = 25000, max_chunks: int = 12) -> List[str]:
+def _chunk_text_for_summary(text: str, chunk_size: int = 35000, max_chunks: int = 20) -> List[str]:
     cleaned = text.strip()
     if len(cleaned) <= 60000:
         return [cleaned]
@@ -422,7 +422,7 @@ def _chunk_text_for_summary(text: str, chunk_size: int = 25000, max_chunks: int 
     while start < length and len(chunks) < max_chunks:
         end = min(start + chunk_size, length)
         if end < length:
-            newline_break = cleaned.rfind("\n", start + int(chunk_size * 0.7), end)
+            newline_break = cleaned.rfind("\n", start + int(chunk_size * 0.75), end)
             if newline_break > start:
                 end = newline_break
         piece = cleaned[start:end].strip()
@@ -433,10 +433,14 @@ def _chunk_text_for_summary(text: str, chunk_size: int = 25000, max_chunks: int 
 
 
 def _summarize_document_sections(question: str, doc_text: str, doc_name: str) -> str:
+    import time
+
     if len(doc_text) <= 60000:
         prompt_to_use = (
-            f"{question}\n\nProvide a comprehensive, thorough, structured summary covering every major section, "
-            f"topic, definition, rule/formula, and key takeaway from start to finish of '{doc_name}'."
+            f"{question}\n\nWrite a thorough, comprehensive summary of the ENTIRE document '{doc_name}'. "
+            "Go through every section/topic in order from beginning to end. For each section, include: "
+            "1) main headings/subtopics, 2) key definitions and concepts, 3) important rules/theorems/formulas/methods, "
+            "and 4) key takeaways or worked-example patterns. Do not skip sections."
         )
         return AI_PROVIDER.generate_answer(prompt=prompt_to_use, context=doc_text)
 
@@ -446,19 +450,25 @@ def _summarize_document_sections(question: str, doc_text: str, doc_name: str) ->
 
     for idx, chunk in enumerate(chunks, start=1):
         part_prompt = (
-            f"You are summarizing Part {idx} of {total_parts} of '{doc_name}' ({len(doc_text):,} total chars). "
-            f"User request: '{question}'.\n"
-            "Do NOT skip topics in this part. List all major headings/topics, key definitions, "
-            "theorems/formulas/rules, and worked-concept takeaways from this section using clear bullet points."
+            f"You are creating a thorough, detailed summary of Part {idx} of {total_parts} of '{doc_name}' "
+            f"({len(doc_text):,} total characters) for: '{question}'.\n"
+            "Extract all material systematically without omitting topics:\n"
+            "- Major headings, subtopics, and section flow\n"
+            "- Key definitions, notation, and conditions/assumptions\n"
+            "- Theorems, formulas, rules, algorithms, or step-by-step methods\n"
+            "- Notable examples, edge cases, and study takeaways\n"
+            "Use clear headings and structured bullet points."
         )
         part_summary = AI_PROVIDER.generate_answer(prompt=part_prompt, context=chunk)
         section_summaries.append(f"## Part {idx} of {total_parts}\n{part_summary}")
+        if idx < total_parts:
+            time.sleep(1.0)
 
     return (
-        f"# Complete Document Summary: {doc_name} ({total_parts} sections covering {len(doc_text):,} chars)\n\n"
-        + "\n\n".join(section_summaries)
+        f"# Complete Whole-Document Summary: {doc_name}\n"
+        f"*Covered {len(doc_text):,} characters across {total_parts} sequential sections.*\n\n"
+        + "\n\n---\n\n".join(section_summaries)
     )
-
 
 @app.post("/chat")
 async def chat(data: LegacyChatRequest):
