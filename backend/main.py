@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from backend.cors_config import get_allowed_origins
 
@@ -411,11 +411,66 @@ async def upload_pdf(file: UploadFile = File(...)):
     }
 
 
+def _chunk_text_for_summary(text: str, chunk_size: int = 25000, max_chunks: int = 12) -> List[str]:
+    cleaned = text.strip()
+    if len(cleaned) <= 60000:
+        return [cleaned]
+
+    chunks: List[str] = []
+    start = 0
+    length = len(cleaned)
+    while start < length and len(chunks) < max_chunks:
+        end = min(start + chunk_size, length)
+        if end < length:
+            newline_break = cleaned.rfind("\n", start + int(chunk_size * 0.7), end)
+            if newline_break > start:
+                end = newline_break
+        piece = cleaned[start:end].strip()
+        if piece:
+            chunks.append(piece)
+        start = end
+    return chunks
+
+
+def _summarize_document_sections(question: str, doc_text: str, doc_name: str) -> str:
+    if len(doc_text) <= 60000:
+        prompt_to_use = (
+            f"{question}\n\nProvide a comprehensive, structured summary covering every major section, "
+            f"concept, architecture, and key takeaway from '{doc_name}'."
+        )
+        return AI_PROVIDER.generate_answer(prompt=prompt_to_use, context=doc_text)
+
+    chunks = _chunk_text_for_summary(doc_text)
+    total_parts = len(chunks)
+    section_summaries: List[str] = []
+
+    for idx, chunk in enumerate(chunks, start=1):
+        part_prompt = (
+            f"Summarize Part {idx} of {total_parts} of '{doc_name}' for the request: '{question}'. "
+            "Extract key headings, definitions, architectures, formulas/metrics, and main points concisely."
+        )
+        part_summary = AI_PROVIDER.generate_answer(prompt=part_prompt, context=chunk)
+        section_summaries.append(f"### Part {idx} of {total_parts}\n{part_summary}")
+
+    combined_sections = "\n\n".join(section_summaries)
+    synth_prompt = (
+        f"{question}\n\nCombine these {total_parts} section summaries of '{doc_name}' into a clear, "
+        "well-structured full-document summary with major sections/themes and key takeaways, "
+        "without dropping important details."
+    )
+    return AI_PROVIDER.generate_answer(prompt=synth_prompt, context=combined_sections)
+
+
 @app.post("/chat")
 async def chat(data: LegacyChatRequest):
     q = data.question.strip()
     if not DOC_TEXT:
         return {"answer": "Please upload PDF first."}
+    is_whole_summary = any(phrase in q.lower() for phrase in ("summarize", "summary", "whole pdf", "entire document", "whole document"))
+    if is_whole_summary:
+        answer = _summarize_document_sections(question=q, doc_text=DOC_TEXT, doc_name=DOC_NAME or "uploaded.pdf")
+        return {"answer": answer}
+
     q_words = [w for w in q.lower().split() if len(w) > 3]
     relevant_lines = []
     char_count = 0
@@ -423,8 +478,8 @@ async def chat(data: LegacyChatRequest):
         if any(w in line.lower() for w in q_words):
             relevant_lines.append(line)
             char_count += len(line) + 1
-            if char_count > 3000:
+            if char_count > 12000:
                 break
-    ctx = "\n".join(relevant_lines) if relevant_lines else DOC_TEXT[:3500]
+    ctx = "\n".join(relevant_lines) if relevant_lines else DOC_TEXT[:60000]
     return {"answer": AI_PROVIDER.generate_answer(prompt=q, context=ctx)}
 
