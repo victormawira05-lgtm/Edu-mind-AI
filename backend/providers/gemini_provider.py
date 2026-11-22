@@ -142,7 +142,7 @@ class GeminiProvider(AIProvider):
             return f"Study guide for '{prompt}': Focus on core definitions, worked examples, and step-by-step checks."
         full_prompt = (
             "You are EduMind AI, a supportive study tutor. Answer clearly using bullet points "
-            f"and step-by-step reasoning.\nContext:\n{context[:3500]}\n\nQuestion: {prompt}"
+            f"and step-by-step reasoning.\nContext:\n{context[:60000]}\n\nQuestion: {prompt}"
         )
         try:
             return self._call_models(full_prompt, json_mode=False)
