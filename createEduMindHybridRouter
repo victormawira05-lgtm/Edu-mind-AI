@@ -1,0 +1,45 @@
+import { useEffect, useMemo, useState } from "react";
+import { createEduMindHybridRouter } from "../ai/hybridInference";
+import {
+  DEFAULT_HYBRID_THRESHOLDS,
+  loadRemoteHybridThresholds,
+  type HybridRuntimeThresholds,
+} from "../firebase/remoteConfigThresholds";
+
+export function useHybridThresholds(
+  firebaseApp: Parameters<typeof loadRemoteHybridThresholds>[0]
+) {
+  const [thresholds, setThresholds] = useState<HybridRuntimeThresholds>(
+    DEFAULT_HYBRID_THRESHOLDS
+  );
+
+  useEffect(() => {
+    let active = true;
+    loadRemoteHybridThresholds(firebaseApp).then((loaded) => {
+      if (active) setThresholds(loaded);
+    });
+    return () => {
+      active = false;
+    };
+  }, [firebaseApp]);
+
+  return { thresholds, setThresholds };
+}
+
+export function createConfiguredStudyRouter(
+  firebaseApp: Parameters<typeof createEduMindHybridRouter>[0]["firebaseApp"],
+  thresholds: HybridRuntimeThresholds,
+  onTelemetry?: Parameters<typeof createEduMindHybridRouter>[0]["onTelemetry"]
+) {
+  return useMemo(
+    () =>
+      createEduMindHybridRouter({
+        firebaseApp,
+        shortPromptThresholdChars: thresholds.shortPromptThresholdChars,
+        longPdfThresholdChars: thresholds.longPdfThresholdChars,
+        chunkSizeChars: thresholds.chunkSizeChars,
+        onTelemetry,
+      }),
+    [firebaseApp, thresholds, onTelemetry]
+  );
+}
