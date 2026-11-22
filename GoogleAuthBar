@@ -1,0 +1,137 @@
+import { useEffect, useMemo, useState } from "react";
+import { getAuth, type User } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { createEduMindHybridRouter, type TelemetryEvent } from "../ai/hybridInference";
+import {
+  loadUserTelemetryHistory,
+  requireAuthenticatedUser,
+  saveUserStudySummary,
+} from "../firebase/userStudyPersistence";
+import { GoogleAuthBar } from "./GoogleAuthBar";
+import { HybridTelemetryBadge, HybridTelemetryPanel } from "./HybridTelemetryPanel";
+
+export function AuthenticatedStudyWorkspace({
+  firebaseApp,
+  docText,
+  docName,
+}: {
+  firebaseApp: Parameters<typeof createEduMindHybridRouter>[0]["firebaseApp"];
+  docText: string;
+  docName: string;
+}) {
+  const auth = useMemo(() => getAuth(firebaseApp), [firebaseApp]);
+  const db = useMemo(() => getFirestore(firebaseApp), [firebaseApp]);
+
+  const [currentUser, setCurrentUser] = useState<User | null>(auth.currentUser);
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [telemetryLog, setTelemetryLog] = useState<TelemetryEvent[]>([]);
+  const [statusMsg, setStatusMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!currentUser?.uid || !docName) {
+      setTelemetryLog([]);
+      return;
+    }
+
+    loadUserTelemetryHistory(db, currentUser.uid, docName).then((events) => {
+      if (active) setTelemetryLog(events);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [db, currentUser?.uid, docName]);
+
+  const router = useMemo(
+    () =>
+      createEduMindHybridRouter({
+        firebaseApp,
+        onTelemetry: (event) => {
+          setTelemetryLog((prev) => [...prev, event]);
+        },
+      }),
+    [firebaseApp]
+  );
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!question.trim() || loading) return;
+
+    setLoading(true);
+    setStatusMsg("");
+    try {
+      const activeUser = await requireAuthenticatedUser(auth, true);
+      setCurrentUser(activeUser);
+
+      const res = await router.askOrSummarize({
+        question: question.trim(),
+        documentText: docText,
+        documentName: docName,
+      });
+      setAnswer(res.text);
+
+      await saveUserStudySummary(db, {
+        uid: activeUser.uid,
+        documentName: docName,
+        documentChars: docText.length,
+        question: question.trim(),
+        summaryText: res.text,
+        telemetry: res.telemetry,
+      });
+
+      setStatusMsg(`Saved for ${activeUser.displayName || activeUser.uid.slice(0, 8)}`);
+    } catch (err) {
+      setStatusMsg(err instanceof Error ? err.message : "Failed to run or save session");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-base font-semibold text-slate-900">EduMind AI Study Assistant</h2>
+          <HybridTelemetryBadge latest={telemetryLog[telemetryLog.length - 1]} />
+        </div>
+
+        <GoogleAuthBar
+          auth={auth}
+          onUserChange={(nextUser) => {
+            setCurrentUser(nextUser);
+            setStatusMsg("");
+          }}
+        />
+      </div>
+
+      {statusMsg && <p className="text-xs text-slate-500">{statusMsg}</p>}
+
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        <input
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder='Ask a question or type "Summarize the whole pdf"...'
+          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {loading ? "Running..." : "Send"}
+        </button>
+      </form>
+
+      {answer && (
+        <div className="whitespace-pre-wrap rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-800">
+          {answer}
+        </div>
+      )}
+
+      <HybridTelemetryPanel events={telemetryLog} onClear={() => setTelemetryLog([])} />
+    </div>
+  );
+}
