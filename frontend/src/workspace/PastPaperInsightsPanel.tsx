@@ -1,6 +1,7 @@
-import React, { useState } from "react";
-import { analyzePastPapersApi, AuthHeadersInput } from "../api/client";
-import { PastPaperInsightsResponse } from "../types/pastPapers";
+﻿import React, { useState } from "react";
+import { analyzePastPapersApi } from "../api/client";
+import type { AuthHeadersInput } from "../api/client";
+import type { PastPaperInsightsResponse } from "../types/pastPapers";
 
 interface Props {
   auth: AuthHeadersInput;
@@ -52,7 +53,7 @@ export const PastPaperInsightsPanel: React.FC<Props> = ({ auth, unitId }) => {
           <ul>
             {insights.recurrence.map((rec) => (
               <li key={rec.topic}>
-                <strong>{rec.topic}</strong> — Observed {rec.occurrence_count} time(s) across{" "}
+                <strong>{rec.topic}</strong> â€” Observed {rec.occurrence_count} time(s) across{" "}
                 {rec.paper_count} paper(s) [{rec.question_types.join(", ")}]
                 <div>
                   <small>
@@ -87,7 +88,7 @@ export const PastPaperInsightsPanel: React.FC<Props> = ({ auth, unitId }) => {
             {insights.extracted_questions.map((q) => (
               <li key={q.question_id}>
                 <strong>
-                  {q.question_label} [{q.question_type} — {q.topic}]
+                  {q.question_label} [{q.question_type} â€” {q.topic}]
                 </strong>
                 <p>{q.question_text}</p>
                 <small>
