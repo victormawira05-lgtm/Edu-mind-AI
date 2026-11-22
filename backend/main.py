@@ -435,8 +435,8 @@ def _chunk_text_for_summary(text: str, chunk_size: int = 25000, max_chunks: int 
 def _summarize_document_sections(question: str, doc_text: str, doc_name: str) -> str:
     if len(doc_text) <= 60000:
         prompt_to_use = (
-            f"{question}\n\nProvide a comprehensive, structured summary covering every major section, "
-            f"concept, architecture, and key takeaway from '{doc_name}'."
+            f"{question}\n\nProvide a comprehensive, thorough, structured summary covering every major section, "
+            f"topic, definition, rule/formula, and key takeaway from start to finish of '{doc_name}'."
         )
         return AI_PROVIDER.generate_answer(prompt=prompt_to_use, context=doc_text)
 
@@ -446,19 +446,18 @@ def _summarize_document_sections(question: str, doc_text: str, doc_name: str) ->
 
     for idx, chunk in enumerate(chunks, start=1):
         part_prompt = (
-            f"Summarize Part {idx} of {total_parts} of '{doc_name}' for the request: '{question}'. "
-            "Extract key headings, definitions, architectures, formulas/metrics, and main points concisely."
+            f"You are summarizing Part {idx} of {total_parts} of '{doc_name}' ({len(doc_text):,} total chars). "
+            f"User request: '{question}'.\n"
+            "Do NOT skip topics in this part. List all major headings/topics, key definitions, "
+            "theorems/formulas/rules, and worked-concept takeaways from this section using clear bullet points."
         )
         part_summary = AI_PROVIDER.generate_answer(prompt=part_prompt, context=chunk)
-        section_summaries.append(f"### Part {idx} of {total_parts}\n{part_summary}")
+        section_summaries.append(f"## Part {idx} of {total_parts}\n{part_summary}")
 
-    combined_sections = "\n\n".join(section_summaries)
-    synth_prompt = (
-        f"{question}\n\nCombine these {total_parts} section summaries of '{doc_name}' into a clear, "
-        "well-structured full-document summary with major sections/themes and key takeaways, "
-        "without dropping important details."
+    return (
+        f"# Complete Document Summary: {doc_name} ({total_parts} sections covering {len(doc_text):,} chars)\n\n"
+        + "\n\n".join(section_summaries)
     )
-    return AI_PROVIDER.generate_answer(prompt=synth_prompt, context=combined_sections)
 
 
 @app.post("/chat")
