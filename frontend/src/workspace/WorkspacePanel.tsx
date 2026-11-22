@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { WorkspaceProfile } from "../types/quiz";
+﻿import React, { useState } from "react";
+import type { WorkspaceProfile } from "../types/quiz";
 
 interface Props {
   profile: WorkspaceProfile;

@@ -1,5 +1,5 @@
-import React from "react";
-import { StudentQuizQuestion } from "../types/quiz";
+﻿import React from "react";
+import type { StudentQuizQuestion } from "../types/quiz";
 
 interface Props {
   questions: StudentQuizQuestion[];
@@ -27,7 +27,7 @@ export const QuestionNavigator: React.FC<Props> = ({
             aria-pressed={active}
             onClick={() => onSelectQuestion(idx)}
           >
-            Q{idx + 1} {answered ? "✓" : "•"}
+            Q{idx + 1} {answered ? "âœ“" : "â€¢"}
           </button>
         );
       })}

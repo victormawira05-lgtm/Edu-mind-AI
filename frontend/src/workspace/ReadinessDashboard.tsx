@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
-import { AuthHeadersInput, fetchReadinessDashboardApi } from "../api/client";
-import { ReadinessDashboardResponse } from "../types/readiness";
+﻿import React, { useEffect, useState } from "react";
+import { fetchReadinessDashboardApi } from "../api/client";
+import type { AuthHeadersInput } from "../api/client";
+import type { ReadinessDashboardResponse } from "../types/readiness";
 
 interface Props {
   auth: AuthHeadersInput;
@@ -14,7 +15,7 @@ export const ReadinessDashboard: React.FC<Props> = ({ auth, unitId }) => {
   useEffect(() => {
     fetchReadinessDashboardApi(auth, unitId)
       .then(setData)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load readiness."));
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load readiness."));
   }, [auth.accessToken, auth.devUserId, unitId]);
 
   if (error) return <p role="alert">{error}</p>;
@@ -34,7 +35,7 @@ export const ReadinessDashboard: React.FC<Props> = ({ auth, unitId }) => {
       <ul>
         {data.demonstrated_topics.map((t) => (
           <li key={`${t.unit_id ?? "all"}-${t.topic}`}>
-            <strong>{t.topic}</strong> — {t.accuracy_percentage}% ({t.correct_count}/
+            <strong>{t.topic}</strong> â€” {t.accuracy_percentage}% ({t.correct_count}/
             {t.questions_answered}) [Demonstrated]
             <div>
               <small>{t.evidence_note}</small>
@@ -47,7 +48,7 @@ export const ReadinessDashboard: React.FC<Props> = ({ auth, unitId }) => {
       <ul>
         {data.insufficient_evidence_topics.map((t) => (
           <li key={`${t.unit_id ?? "all"}-${t.topic}`}>
-            <strong>{t.topic}</strong> — {t.accuracy_percentage}% ({t.correct_count}/
+            <strong>{t.topic}</strong> â€” {t.accuracy_percentage}% ({t.correct_count}/
             {t.questions_answered}) [Insufficient Evidence]
             <div>
               <small>{t.evidence_note}</small>
@@ -63,7 +64,7 @@ export const ReadinessDashboard: React.FC<Props> = ({ auth, unitId }) => {
             <strong>
               [{rec.priority.toUpperCase()}] {rec.topic}
             </strong>{" "}
-            — {rec.reason}
+            â€” {rec.reason}
             <div>{rec.suggested_action}</div>
           </li>
         ))}

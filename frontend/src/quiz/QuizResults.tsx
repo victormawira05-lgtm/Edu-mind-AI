@@ -1,5 +1,5 @@
-import React from "react";
-import { QuizAttemptResult } from "../types/quiz";
+﻿import React from "react";
+import type { QuizAttemptResult } from "../types/quiz";
 
 interface Props {
   result: QuizAttemptResult;

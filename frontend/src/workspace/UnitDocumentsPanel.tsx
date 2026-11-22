@@ -4,8 +4,8 @@ import {
   retrieveUnitChunksApi,
   uploadUnitDocumentApi,
 } from "../api/client";
-import { AuthHeadersInput } from "../api/client";
-import {
+import type { AuthHeadersInput } from "../api/client";
+import type {
   DocumentCategory,
   RetrievedChunkResult,
   UploadedDocumentSummary,
@@ -111,7 +111,7 @@ export const UnitDocumentsPanel: React.FC<Props> = ({ auth, unitId }) => {
       <ul>
         {docs.map((d) => (
           <li key={d.document_id}>
-            <strong>{d.title}</strong> [{d.category}] — {d.page_count} pages, {d.chunk_count} chunks
+            <strong>{d.title}</strong> [{d.category}] â€” {d.page_count} pages, {d.chunk_count} chunks
           </li>
         ))}
       </ul>
