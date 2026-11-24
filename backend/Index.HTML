@@ -1,58 +1,125 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width">
-<title>EduMind AI</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edu-mind AI - Study Tutor</title>
 <style>
-body{font-family:system-ui;padding:20px;max-width:600px;margin:auto;background:#f8fafc}
-.card{background:white;padding:20px;border-radius:16px;box-shadow:0 4px 12px #0001;margin:15px 0}
-button{background:#4f46e5;color:white;border:0;padding:12px 20px;border-radius:10px;width:100%;font-weight:bold}
-input{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;margin:8px 0}
-pre{white-space:pre-wrap;background:#f1f5f9;padding:12px;border-radius:10px}
+  body{font-family:Arial;background:#f5f7ff;margin:0;padding:15px}
+  .card{background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 10px #0001}
+  select,input[type=text]{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;margin:6px 0}
+  button{padding:12px 16px;border:0;border-radius:10px;cursor:pointer;font-weight:bold;margin:4px 2px}
+  .btn-blue{background:#2563eb;color:#fff}.btn-green{background:#16a34a;color:#fff}
+  .btn-purple{background:#7c3aed;color:#fff}.btn-orange{background:#ea580c;color:#fff}
+  .btn-gray{background:#e5e7eb}.active{outline:3px solid #000}
+  #answer{white-space:pre-wrap;line-height:1.6;background:#f8fafc;padding:12px;border-radius:10px}
+  .quiz-q{background:#f8fafc;padding:10px;border-radius:10px;margin:8px 0}
 </style>
 </head>
 <body>
-<h1>🧠 EduMind AI</h1>
-<p>Upload. Learn. Master.</p>
+
+<h2>📚 Edu-mind AI - Engineering Maths Tutor</h2>
+<p>Logged in as <b>Vic</b></p>
 
 <div class="card">
-<h3>1. Upload PDF Notes</h3>
-<input type="file" id="pdf" accept=".pdf">
-<button onclick="upload()">Upload & Summarize</button>
-<pre id="uploadResult"></pre>
+  <label>Select Unit</label>
+  <select id="unitSelect">
+    <option value="BCU111">BCU111 - Engineering Maths</option>
+    <option value="STA301">STA301 - Statistics & Probability</option>
+    <option value="PHY101">PHY101 - Physics</option>
+    <option value="COM101">COM101 - Communication</option>
+  </select>
+
+  <h3>📄 Upload Lecture PDF</h3>
+  <input type="file" id="pdfInput" accept=".pdf">
+  <select id="categorySelect">
+    <option value="lecture_notes">Lecture Notes</option>
+    <option value="past_paper">Past Paper</option>
+    <option value="assignment">Assignment</option>
+  </select>
+  <button class="btn-blue" onclick="uploadPDF()">Upload PDF</button>
+  <p id="uploadStatus"></p>
+  <div id="fileList"></div>
 </div>
 
 <div class="card">
-<h3>2. Ask Question</h3>
-<input id="docId" placeholder="Paste Doc ID from above">
-<input id="question" placeholder="e.g., What is photosynthesis?">
-<button onclick="ask()">Ask EduMind</button>
-<pre id="askResult"></pre>
+  <h3>Ask Your Tutor</h3>
+  <p>Choose mode:</p>
+  <button id="btnNotes" class="btn-green active" onclick="setMode('notes')">📄 Ask From My Notes</button>
+  <button id="btnGeneral" class="btn-gray" onclick="setMode('general')">🌐 Ask AI Online</button>
+  <p id="modeText"><b>Mode:</b> Answering from YOUR uploaded PDFs only</p>
+  <input type="text" id="questionInput" placeholder="e.g. Fit simple linear regression Y on X... Predict when X=35">
+  <button class="btn-blue" onclick="askAI()">Ask AI</button>
+  <button class="btn-purple" onclick="summarize()">📝 Summary</button>
+  <button class="btn-orange" onclick="makeQuiz()">🧪 Test Me</button>
+  <div id="answer">Your answer will appear here...</div>
+  <div id="quizArea"></div>
 </div>
 
 <script>
-const API = "";
-let lastDoc = "";
-async function upload(){
-  const file = document.getElementById('pdf').files[0];
-  if(!file) return alert("Choose PDF");
-  const fd = new FormData(); fd.append("file", file);
-  document.getElementById('uploadResult').innerText = "Uploading & AI reading...";
-  const r = await fetch(API+"/upload", {method:"POST", body:fd});
-  const j = await r.json();
-  lastDoc = j.doc_id; document.getElementById('docId').value = lastDoc;
-  document.getElementById('uploadResult').innerText = "Doc ID: "+j.doc_id+"\n\nSUMMARY:\n"+(j.summary||JSON.stringify(j,null,2));
+const API = "https://edu-mind-ai.onrender.com";
+let currentMode = "notes";
+
+function getHeaders(isJson=true){
+  let h = {"Authorization":"Bearer dev","X-Dev-User-Id":"vic-demo"};
+  if(isJson) h["Content-Type"]="application/json";
+  return h;
 }
-async function ask(){
-  const q = document.getElementById('question').value;
-  const d = document.getElementById('docId').value;
-  if(!q||!d) return alert("Need Doc ID + Question");
-  const fd = new FormData(); fd.append("question", q); fd.append("doc_id", d);
-  document.getElementById('askResult').innerText = "Thinking...";
-  const r = await fetch(API+"/ask", {method:"POST", body:fd});
-  const j = await r.json();
-  document.getElementById('askResult').innerText = j.answer||JSON.stringify(j,null,2);
+function setMode(m){
+  currentMode=m;
+  document.getElementById("btnNotes").className = m==="notes" ? "btn-green active" : "btn-gray";
+  document.getElementById("btnGeneral").className = m==="general" ? "btn-green active" : "btn-gray";
+  document.getElementById("modeText").innerHTML = m==="notes" ? "<b>Mode:</b> Answering from YOUR uploaded PDFs only" : "<b>Mode:</b> Answering from general AI knowledge";
 }
+async function uploadPDF(){
+  const file = document.getElementById("pdfInput").files[0];
+  if(!file) return alert("Choose a PDF first");
+  const unit = document.getElementById("unitSelect").value;
+  const category = document.getElementById("categorySelect").value;
+  document.getElementById("uploadStatus").innerText="Uploading...";
+  const form = new FormData();
+  form.append("file", file);
+  form.append("category", category);
+  const res = await fetch(`${API}/api/units/${unit}/documents`, {method:"POST", headers:{"Authorization":"Bearer dev","X-Dev-User-Id":"vic-demo"}, body:form});
+  const data = await res.json();
+  document.getElementById("uploadStatus").innerText = "✅ " + data.message + " - " + data.filename + " ("+data.pages+" pages)";
+  loadFiles();
+}
+async function loadFiles(){
+  const unit = document.getElementById("unitSelect").value;
+  const res = await fetch(`${API}/api/units/${unit}/documents`, {headers:getHeaders(false)});
+  const files = await res.json();
+  document.getElementById("fileList").innerHTML = files.map(f=>`📄 ${f.filename} - ${f.category} <br>`).join("") || "No PDFs yet";
+}
+async function askAI(){
+  const q = document.getElementById("questionInput").value;
+  if(!q) return alert("Type a question");
+  const unit = document.getElementById("unitSelect").value;
+  document.getElementById("answer").innerText="Thinking...";
+  const res = await fetch(`${API}/api/units/${unit}/ask`, {method:"POST", headers:getHeaders(), body:JSON.stringify({question:q, mode:currentMode})});
+  const data = await res.json();
+  document.getElementById("answer").innerText = data.answer;
+}
+async function summarize(){
+  const unit = document.getElementById("unitSelect").value;
+  document.getElementById("answer").innerText="Summarizing your notes...";
+  const res = await fetch(`${API}/api/units/${unit}/summarize`, {method:"POST", headers:getHeaders(), body:JSON.stringify({})});
+  const data = await res.json();
+  document.getElementById("answer").innerText = data.summary;
+}
+async function makeQuiz(){
+  const unit = document.getElementById("unitSelect").value;
+  document.getElementById("quizArea").innerHTML="Generating quiz from your notes...";
+  const res = await fetch(`${API}/api/units/${unit}/quiz`, {method:"POST", headers:getHeaders(), body:JSON.stringify({})});
+  const data = await res.json();
+  let html="";
+  (data.quiz||[]).forEach((q,i)=>{
+    html+=`<div class="quiz-q"><b>Q${i+1}. ${q.question}</b><br>${q.options.map((o,idx)=>`<label><input type="radio" name="q${i}" value="${idx}"> ${o}</label><br>`).join("")}<small>Answer: ${q.options[q.correct_index]} - ${q.explanation}</small></div>`;
+  });
+  document.getElementById("quizArea").innerHTML = html || "No quiz - upload PDF first";
+}
+document.getElementById("unitSelect").addEventListener("change", loadFiles);
+loadFiles();
 </script>
 </body>
 </html>
