@@ -11,7 +11,7 @@ import google.generativeai as genai
 SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("SUPABASE_PROJECT_URL") or ""
 SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_KEY") or ""
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or ""
-ALLOW_DEV_AUTH = os.getenv("ALLOW_DEV_AUTH", "false").lower() == "true"
+ALLOW_DEV_AUTH = os.getenv("ALLOW_DEV_AUTH", "false").strip().strip('"').strip("'").lower() in ("true", "1", "yes", "on")
 
 print(f"STARTUP: SUPABASE_URL set = {bool(SUPABASE_URL)}")
 print(f"STARTUP: SUPABASE_KEY set = {bool(SUPABASE_KEY)}")
