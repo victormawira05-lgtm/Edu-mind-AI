@@ -1,9 +1,7 @@
 fastapi
-uvicorn[standard]
-python-multipart
-pypdf
-google-genai
-python-dotenv
+uvicorn
+PyMuPDF
 supabase
-python-jose[cryptography]
-psycopg[binary]
+google-generativeai
+python-multipart
+python-dotenv
