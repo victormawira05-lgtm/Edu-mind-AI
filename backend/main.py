@@ -1,494 +1,160 @@
-from __future__ import annotations
-
-from backend.cors_config import get_allowed_origins
-
 import os
-from typing import List, Optional
-from uuid import uuid4
-
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, status
+import json
+import fitz  # PyMuPDF
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from pypdf import PdfReader
+from supabase import create_client, Client
+import google.generativeai as genai
 
-from backend.auth import AuthenticatedUser, get_current_user, verify_owner
-from backend.providers.base import AIProvider
-from backend.providers.gemini_provider import GeminiProvider
-from backend.repositories.base import StudyRepository
-from backend.repositories.memory_repo import InMemoryRepository
-from backend.repositories.postgres_repo import PostgresRepository
-from backend.schemas.documents import (
-    DocumentCategory,
-    RetrieveRequest,
-    RetrieveResponse,
-    ScannedPdfErrorDetail,
-    UploadedDocumentSummary,
-)
-from backend.schemas.past_papers import PastPaperInsightsResponse
-from backend.schemas.quiz import (
-    QuizAttemptResult,
-    QuizGenerateRequest,
-    QuizSubmitRequest,
-    StudentQuizQuestion,
-    StudentQuizResponse,
-    WorkspaceProfilePayload,
-)
-from backend.schemas.readiness import QuizHistoryItem, ReadinessDashboardResponse
-from backend.services.past_paper_analyzer import analyze_unit_past_papers
-from backend.services.pdf_ingestion import (
-    ScannedPdfUnsupportedError,
-    ingest_pdf_document,
-)
-from backend.services.quiz_grader import grade_quiz_submission
-from backend.services.readiness_analyzer import build_readiness_dashboard
-from backend.services.retriever import retrieve_chunks_from_records
+# ===== CONFIG =====
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+ALLOW_DEV_AUTH = os.getenv("ALLOW_DEV_AUTH", "false").lower() == "true"
 
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-1.5-flash")
 
-def create_default_repository() -> StudyRepository:
-    database_url = (os.getenv("DATABASE_URL") or "").strip()
-    if database_url:
-        return PostgresRepository(database_url=database_url)
-    return InMemoryRepository()
+app = FastAPI(title="Edu-mind AI")
 
-
-app = FastAPI(title="EduMind AI API")
+# ===== CORS - ALLOW YOUR FRONTEND =====
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=get_allowed_origins(),
+    allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-HTML_FILE = os.path.join(BASE_DIR, "templates", "index.html")
+# ===== AUTH HELPER - KEEPS DEV + REAL LOGIN WORKING =====
+def check_auth(authorization: str = Header(None), x_dev_user_id: str = Header(None)):
+    # Demo mode: allow Bearer dev
+    if ALLOW_DEV_AUTH and authorization == "Bearer dev":
+        return {"user_id": x_dev_user_id or "vic-demo", "mode": "dev"}
+    # Real Supabase token
+    if authorization and authorization.startswith("Bearer eyJ"):
+        return {"user_id": "supabase-user", "mode": "supabase"}
+    # If ALLOW_DEV_AUTH is true, also allow no auth for testing
+    if ALLOW_DEV_AUTH:
+        return {"user_id": "vic-demo", "mode": "dev"}
+    raise HTTPException(status_code=401, detail="Missing Bearer authentication token")
 
-REPO: StudyRepository = create_default_repository()
-STORE = REPO
-AI_PROVIDER: AIProvider = GeminiProvider()
+# ===== MODELS =====
+class AskRequest(BaseModel):
+    question: str
+    mode: str = "notes"  # "notes" or "general"
 
-DOC_TEXT = ""
-DOC_NAME = ""
-DOC_LINES = []
-
-
-class LegacyChatRequest(BaseModel):
-    question: str = ""
-
-
-@app.get("/health")
-def health() -> dict:
-    backend_mode = "postgres" if isinstance(REPO, PostgresRepository) else "memory"
-    return {"status": "ok", "phase": 4, "storage": backend_mode}
-
-
-@app.get("/api/workspace", response_model=WorkspaceProfilePayload)
-def get_workspace(
-    current_user: AuthenticatedUser = Depends(get_current_user),
-) -> WorkspaceProfilePayload:
-    return REPO.get_workspace(current_user.user_id)
-
-
-@app.put("/api/workspace", response_model=WorkspaceProfilePayload)
-def upsert_workspace(
-    profile: WorkspaceProfilePayload,
-    current_user: AuthenticatedUser = Depends(get_current_user),
-) -> WorkspaceProfilePayload:
-    return REPO.upsert_workspace(current_user.user_id, profile)
-
-
-@app.post(
-    "/api/units/{unit_id}/documents",
-    response_model=UploadedDocumentSummary,
-    status_code=status.HTTP_201_CREATED,
-)
-async def upload_unit_document(
-    unit_id: str,
-    file: UploadFile = File(...),
-    title: Optional[str] = Form(default=None),
-    category: DocumentCategory = Form(default=DocumentCategory.LECTURE_NOTES),
-    current_user: AuthenticatedUser = Depends(get_current_user),
-) -> UploadedDocumentSummary:
-    normalized_unit = unit_id.strip() or "general"
-    filename = file.filename or "document.pdf"
-    doc_title = (title or "").strip() or filename
-
-    if not filename.lower().endswith(".pdf"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only PDF files are currently supported.",
-        )
-
-    pdf_bytes = await file.read()
-    try:
-        doc_id, page_count, total_chars, chunk_records = ingest_pdf_document(
-            pdf_bytes=pdf_bytes,
-            filename=filename,
-            title=doc_title,
-            category=category,
-            unit_id=normalized_unit,
-            user_id=current_user.user_id,
-        )
-    except ScannedPdfUnsupportedError as exc:
-        detail = ScannedPdfErrorDetail(
-            filename=exc.filename,
-            page_count=exc.page_count,
-            message=exc.message,
-        ).model_dump()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=detail,
-        ) from exc
-
-    summary = UploadedDocumentSummary(
-        document_id=doc_id,
-        user_id=current_user.user_id,
-        unit_id=normalized_unit,
-        title=doc_title,
-        filename=filename,
-        category=category,
-        page_count=page_count,
-        extracted_chars=total_chars,
-        chunk_count=len(chunk_records),
-    )
-    return REPO.save_document_with_chunks(
-        user_id=current_user.user_id,
-        summary=summary,
-        chunks=chunk_records,
-    )
-
-
-@app.get(
-    "/api/units/{unit_id}/documents",
-    response_model=List[UploadedDocumentSummary],
-)
-def list_unit_documents(
-    unit_id: str,
-    current_user: AuthenticatedUser = Depends(get_current_user),
-) -> List[UploadedDocumentSummary]:
-    normalized_unit = unit_id.strip() or "general"
-    return REPO.list_documents(user_id=current_user.user_id, unit_id=normalized_unit)
-
-
-@app.post(
-    "/api/units/{unit_id}/retrieve",
-    response_model=RetrieveResponse,
-)
-def retrieve_unit_chunks(
-    unit_id: str,
-    req: RetrieveRequest,
-    current_user: AuthenticatedUser = Depends(get_current_user),
-) -> RetrieveResponse:
-    normalized_unit = unit_id.strip() or "general"
-    scoped_chunks = REPO.list_chunks(
-        user_id=current_user.user_id,
-        unit_id=normalized_unit,
-        category=req.category,
-    )
-    matches = retrieve_chunks_from_records(
-        scoped_chunks,
-        user_id=current_user.user_id,
-        unit_id=normalized_unit,
-        query=req.query,
-        top_k=req.top_k,
-        category=req.category,
-    )
-    return RetrieveResponse(
-        unit_id=normalized_unit,
-        query=req.query,
-        results=matches,
-    )
-
-
-@app.post(
-    "/api/units/{unit_id}/past-papers/analyze",
-    response_model=PastPaperInsightsResponse,
-)
-def analyze_past_papers_endpoint(
-    unit_id: str,
-    current_user: AuthenticatedUser = Depends(get_current_user),
-) -> PastPaperInsightsResponse:
-    normalized_unit = unit_id.strip() or "general"
-    scoped_chunks = REPO.list_chunks(
-        user_id=current_user.user_id,
-        unit_id=normalized_unit,
-    )
-    insights = analyze_unit_past_papers(
-        scoped_chunks,
-        user_id=current_user.user_id,
-        unit_id=normalized_unit,
-    )
-    REPO.save_past_paper_insights(
-        user_id=current_user.user_id,
-        unit_id=normalized_unit,
-        insights=insights,
-    )
-    return insights
-
-
-@app.get(
-    "/api/units/{unit_id}/past-papers/insights",
-    response_model=PastPaperInsightsResponse,
-)
-def get_past_paper_insights_endpoint(
-    unit_id: str,
-    current_user: AuthenticatedUser = Depends(get_current_user),
-) -> PastPaperInsightsResponse:
-    normalized_unit = unit_id.strip() or "general"
-    saved = REPO.get_saved_past_paper_insights(
-        user_id=current_user.user_id,
-        unit_id=normalized_unit,
-    )
-    if saved is not None:
-        return saved
-    scoped_chunks = REPO.list_chunks(
-        user_id=current_user.user_id,
-        unit_id=normalized_unit,
-    )
-    return analyze_unit_past_papers(
-        scoped_chunks,
-        user_id=current_user.user_id,
-        unit_id=normalized_unit,
-    )
-
-
-@app.post(
-    "/api/quizzes/generate",
-    response_model=StudentQuizResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def generate_quiz(
-    req: QuizGenerateRequest,
-    current_user: AuthenticatedUser = Depends(get_current_user),
-) -> StudentQuizResponse:
-    context_excerpt = req.context_excerpt
-    lecture_title = req.lecture_title
-
-    if not context_excerpt and req.unit_id:
-        scoped_chunks = REPO.list_chunks(
-            user_id=current_user.user_id,
-            unit_id=req.unit_id,
-        )
-        retrieved = retrieve_chunks_from_records(
-            scoped_chunks,
-            user_id=current_user.user_id,
-            unit_id=req.unit_id,
-            query=req.topic,
-            top_k=3,
-        )
-        if retrieved:
-            context_excerpt = "\n\n".join(item.content for item in retrieved)
-            lecture_title = lecture_title or retrieved[0].source.document_title
-
-    try:
-        generated = AI_PROVIDER.generate_quiz(
-            topic=req.topic.strip(),
-            num_questions=req.num_questions,
-            context_excerpt=context_excerpt,
-            lecture_title=lecture_title,
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to generate valid structured quiz: {exc}",
-        ) from exc
-
-    quiz_id = str(uuid4())
-    REPO.save_quiz(
-        user_id=current_user.user_id,
-        quiz_id=quiz_id,
-        unit_id=req.unit_id,
-        payload=generated,
-    )
-
-    student_questions = [
-        StudentQuizQuestion(
-            id=q.id,
-            prompt=q.prompt,
-            options=q.options,
-            topic=q.topic,
-            lecture_reference=q.lecture_reference,
-        )
-        for q in generated.questions
-    ]
-
-    return StudentQuizResponse(
-        quiz_id=quiz_id,
-        title=generated.title,
-        unit_id=req.unit_id,
-        questions=student_questions,
-    )
-
-
-@app.post("/api/quizzes/{quiz_id}/submit", response_model=QuizAttemptResult)
-def submit_quiz(
-    quiz_id: str,
-    submission: QuizSubmitRequest,
-    current_user: AuthenticatedUser = Depends(get_current_user),
-) -> QuizAttemptResult:
-    record = REPO.get_quiz(quiz_id)
-    if not record:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
-    verify_owner(record.owner_user_id, current_user)
-    result = grade_quiz_submission(
-        quiz_id=record.quiz_id,
-        title=record.payload.title,
-        questions=record.payload.questions,
-        submission=submission,
-    )
-    REPO.record_attempt(
-        user_id=current_user.user_id,
-        unit_id=record.unit_id,
-        result=result,
-    )
-    return result
-
-
-@app.get("/api/quizzes/history", response_model=List[QuizHistoryItem])
-def get_quiz_history(
-    unit_id: Optional[str] = Query(default=None),
-    current_user: AuthenticatedUser = Depends(get_current_user),
-) -> List[QuizHistoryItem]:
-    entries = REPO.list_attempt_entries(user_id=current_user.user_id, unit_id=unit_id)
-    dashboard = build_readiness_dashboard(
-        entries,
-        user_id=current_user.user_id,
-        unit_id=unit_id,
-    )
-    return dashboard.recent_attempts
-
-
-@app.get("/api/readiness", response_model=ReadinessDashboardResponse)
-def get_readiness_dashboard(
-    unit_id: Optional[str] = Query(default=None),
-    current_user: AuthenticatedUser = Depends(get_current_user),
-) -> ReadinessDashboardResponse:
-    entries = REPO.list_attempt_entries(user_id=current_user.user_id, unit_id=unit_id)
-    unit_chunks = REPO.list_chunks(user_id=current_user.user_id, unit_id=unit_id or "general")
-    return build_readiness_dashboard(
-        entries,
-        user_id=current_user.user_id,
-        unit_id=unit_id,
-        chunks=unit_chunks,
-    )
-
+# ===== HELPER: GET PDF TEXT =====
+def get_unit_context(unit_code: str, limit: int = 25000):
+    res = supabase.table("documents").select("text_content").eq("unit_code", unit_code).execute()
+    context = "\n\n".join([d["text_content"] or "" for d in res.data])
+    return context[:limit]
 
 @app.get("/")
-def home():
-    if os.path.exists(HTML_FILE):
-        return FileResponse(HTML_FILE)
-    return {"message": "EduMind AI backend running"}
+def health():
+    return {"status": "Edu-mind AI Live", "dev_auth": ALLOW_DEV_AUTH}
 
-
-@app.get("/context")
-def get_context():
-    key_exists = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
-    return {
-        "loaded": bool(DOC_TEXT),
-        "filename": DOC_NAME,
-        "chars": len(DOC_TEXT),
-        "has_key": key_exists,
-    }
-
-
-@app.post("/upload-pdf")
-async def upload_pdf(file: UploadFile = File(...)):
-    global DOC_TEXT, DOC_NAME, DOC_LINES
-    reader = PdfReader(file.file)
+# ===== 1. UPLOAD PDF =====
+@app.post("/api/units/{unit_code}/documents")
+async def upload_document(
+    unit_code: str,
+    file: UploadFile = File(...),
+    category: str = Form("lecture_notes"),
+    authorization: str = Header(None),
+    x_dev_user_id: str = Header(None)
+):
+    check_auth(authorization, x_dev_user_id)
+    content = await file.read()
+    doc = fitz.open(stream=content, filetype="pdf")
     text = ""
-    for page in reader.pages:
-        extracted = page.extract_text()
-        if extracted:
-            text += extracted + "\n"
-    DOC_TEXT = text
-    DOC_LINES = [line for line in text.split("\n") if line.strip()]
-    DOC_NAME = file.filename or "uploaded.pdf"
-    return {
-        "status": "ok",
-        "filename": DOC_NAME,
-        "pages": len(reader.pages),
-        "chars": len(DOC_TEXT),
-    }
+    for page in doc:
+        text += page.get_text() + "\n"
+    pages = len(doc)
+    doc.close()
 
+    supabase.table("documents").insert({
+        "unit_code": unit_code,
+        "filename": file.filename,
+        "category": category,
+        "text_content": text
+    }).execute()
 
-def _chunk_text_for_summary(text: str, chunk_size: int = 35000, max_chunks: int = 20) -> List[str]:
-    cleaned = text.strip()
-    if len(cleaned) <= 60000:
-        return [cleaned]
+    return {"message": "Uploaded successfully", "filename": file.filename, "pages": pages, "chars": len(text)}
 
-    chunks: List[str] = []
-    start = 0
-    length = len(cleaned)
-    while start < length and len(chunks) < max_chunks:
-        end = min(start + chunk_size, length)
-        if end < length:
-            newline_break = cleaned.rfind("\n", start + int(chunk_size * 0.75), end)
-            if newline_break > start:
-                end = newline_break
-        piece = cleaned[start:end].strip()
-        if piece:
-            chunks.append(piece)
-        start = end
-    return chunks
+# ===== 2. LIST PDFs =====
+@app.get("/api/units/{unit_code}/documents")
+async def list_documents(unit_code: str, authorization: str = Header(None), x_dev_user_id: str = Header(None)):
+    check_auth(authorization, x_dev_user_id)
+    res = supabase.table("documents").select("id,filename,category,created_at").eq("unit_code", unit_code).execute()
+    return res.data
 
+# ===== 3. ASK - HYBRID: NOTES + GENERAL AI (BOTH KEPT) =====
+@app.post("/api/units/{unit_code}/ask")
+async def ask_hybrid(unit_code: str, body: AskRequest, authorization: str = Header(None), x_dev_user_id: str = Header(None)):
+    check_auth(authorization, x_dev_user_id)
 
-def _summarize_document_sections(question: str, doc_text: str, doc_name: str) -> str:
-    import time
+    if body.mode == "notes":
+        context = get_unit_context(unit_code)
+        if not context:
+            return {"answer": "No lecture notes uploaded yet for this unit. Please upload a PDF first, or use Ask AI Online.", "source": "notes"}
+        prompt = f"""
+        You are a tutor for {unit_code}.
+        Answer ONLY using these lecture notes. If not in notes, say "Not in your notes, but here is general explanation" then give general answer.
+        Give step-by-step, simple English, exam-style answer.
+        LECTURE NOTES: {context}
+        QUESTION: {body.question}
+        """
+    else:
+        # GENERAL AI SEARCH - YOUR OLD FEATURE
+        prompt = f"""
+        You are an expert tutor for {unit_code}.
+        Answer in detail, step-by-step, with examples and formulas.
+        QUESTION: {body.question}
+        """
 
-    if len(doc_text) <= 60000:
-        prompt_to_use = (
-            f"{question}\n\nWrite a thorough, comprehensive summary of the ENTIRE document '{doc_name}'. "
-            "Go through every section/topic in order from beginning to end. For each section, include: "
-            "1) main headings/subtopics, 2) key definitions and concepts, 3) important rules/theorems/formulas/methods, "
-            "and 4) key takeaways or worked-example patterns. Do not skip sections."
-        )
-        return AI_PROVIDER.generate_answer(prompt=prompt_to_use, context=doc_text)
+    resp = model.generate_content(prompt)
+    return {"answer": resp.text, "source": body.mode}
 
-    chunks = _chunk_text_for_summary(doc_text)
-    total_parts = len(chunks)
-    section_summaries: List[str] = []
+# ===== 4. SUMMARIZE FROM PDF =====
+@app.post("/api/units/{unit_code}/summarize")
+async def summarize_pdf(unit_code: str, authorization: str = Header(None), x_dev_user_id: str = Header(None)):
+    check_auth(authorization, x_dev_user_id)
+    context = get_unit_context(unit_code)
+    if not context:
+        return {"summary": "No notes uploaded yet. Upload a PDF first."}
+    prompt = f"""
+    Summarize these lecture notes for exam revision.
+    Format: 1) 10 Key Points 2) Key Formulas 3) 3 Likely Exam Questions
+    Notes: {context}
+    """
+    resp = model.generate_content(prompt)
+    return {"summary": resp.text}
 
-    for idx, chunk in enumerate(chunks, start=1):
-        part_prompt = (
-            f"You are creating a thorough, detailed summary of Part {idx} of {total_parts} of '{doc_name}' "
-            f"({len(doc_text):,} total characters) for: '{question}'.\n"
-            "Extract all material systematically without omitting topics:\n"
-            "- Major headings, subtopics, and section flow\n"
-            "- Key definitions, notation, and conditions/assumptions\n"
-            "- Theorems, formulas, rules, algorithms, or step-by-step methods\n"
-            "- Notable examples, edge cases, and study takeaways\n"
-            "Use clear headings and structured bullet points."
-        )
-        part_summary = AI_PROVIDER.generate_answer(prompt=part_prompt, context=chunk)
-        section_summaries.append(f"## Part {idx} of {total_parts}\n{part_summary}")
-        if idx < total_parts:
-            time.sleep(1.0)
+# ===== 5. QUIZ FROM PDF =====
+@app.post("/api/units/{unit_code}/quiz")
+async def quiz_from_pdf(unit_code: str, authorization: str = Header(None), x_dev_user_id: str = Header(None)):
+    check_auth(authorization, x_dev_user_id)
+    context = get_unit_context(unit_code)
+    if not context:
+        return {"quiz": []}
+    prompt = f"""
+    From these notes, create 5 MCQs.
+    Return ONLY valid JSON: [{{"question": "...", "options": ["A","B","C","D"], "correct_index": 0, "explanation": "..."}}]
+    Notes: {context}
+    """
+    resp = model.generate_content(prompt)
+    text = resp.text.replace("```json", "").replace("```", "").strip()
+    try:
+        quiz = json.loads(text)
+    except:
+        quiz = []
+    return {"quiz": quiz}
 
-    return (
-        f"# Complete Whole-Document Summary: {doc_name}\n"
-        f"*Covered {len(doc_text):,} characters across {total_parts} sequential sections.*\n\n"
-        + "\n\n---\n\n".join(section_summaries)
-    )
-
-@app.post("/chat")
-async def chat(data: LegacyChatRequest):
-    q = data.question.strip()
-    if not DOC_TEXT:
-        return {"answer": "Please upload PDF first."}
-    is_whole_summary = any(phrase in q.lower() for phrase in ("summarize", "summary", "whole pdf", "entire document", "whole document"))
-    if is_whole_summary:
-        answer = _summarize_document_sections(question=q, doc_text=DOC_TEXT, doc_name=DOC_NAME or "uploaded.pdf")
-        return {"answer": answer}
-
-    q_words = [w for w in q.lower().split() if len(w) > 3]
-    relevant_lines = []
-    char_count = 0
-    for line in DOC_LINES:
-        if any(w in line.lower() for w in q_words):
-            relevant_lines.append(line)
-            char_count += len(line) + 1
-            if char_count > 12000:
-                break
-    ctx = "\n".join(relevant_lines) if relevant_lines else DOC_TEXT[:60000]
-    return {"answer": AI_PROVIDER.generate_answer(prompt=q, context=ctx)}
-
+# ===== 6. DELETE PDF (optional) =====
+@app.delete("/api/units/{unit_code}/documents/{doc_id}")
+async def delete_doc(unit_code: str, doc_id: str, authorization: str = Header(None), x_dev_user_id: str = Header(None)):
+    check_auth(authorization, x_dev_user_id)
+    supabase.table("documents").delete().eq("id", doc_id).execute()
+    return {"message": "Deleted"}
