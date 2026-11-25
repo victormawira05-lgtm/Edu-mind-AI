@@ -6,7 +6,7 @@ Edu-mind AI helps students master Statistics, Calculus, Physics, Hypothesis Test
 
 Built for students in Kenya and beyond — study **ONLINE with real AI** or **OFFLINE** when bundles run out.
 
-**Live Demo:** [https://edu-mind-ai.web.app](https://edu-mind-ai.web.app) ← *replace with your real Firebase URL*
+**Live Demo:** https://edu-mind-ai-e778b.web.app/ 
 **Repo:** https://github.com/victormawira05-lgtm/Edu-mind-AI
 **License:** [MIT](https://github.com/victormawira05-lgtm/Edu-mind-AI/blob/main/LICENSE)
 
