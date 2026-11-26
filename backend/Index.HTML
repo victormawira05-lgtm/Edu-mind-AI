@@ -47,7 +47,7 @@
 <div class="bg-blue-600 p-8 text-white hidden md:flex flex-col justify-between">
 <div><div class="flex items-center gap-2"><div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-2xl">🧠</div><span class="font-extrabold text-xl leading-none">EduMind<br>AI</span></div>
 <h1 class="text-[32px] font-bold leading-tight mt-10">Learn smarter,<br>not harder.</h1><p class="text-blue-100 mt-3">Personalized AI tutor, courses & progress tracking — all in one place.</p></div>
-<div class="bg-white/15 rounded-2xl p-3 text-sm">⭐ <b>4.9/5</b> — Loved by 12,000+ students in Kenya • <span id="dbStatus" class="text-yellow-200">Connecting...</span></div></div>
+<div class="bg-white/15 rounded-2xl p-3 text-sm">⭐ <b>4.9/5</b> — Loved by 12,000+ students in Kenya • <span id="dbStatus" class="text-yellow-200">Connecting to Supabase...</span></div></div>
 <div class="p-6 sm:p-8">
 <div class="flex bg-slate-100 rounded-full p-1 w-fit"><button id="loginTab" onclick="switchTab('login')" class="px-6 py-2 rounded-full bg-white font-semibold shadow text-sm">Login</button><button id="signupTab" onclick="switchTab('signup')" class="px-6 py-2 rounded-full font-semibold text-sm text-slate-500">Sign Up</button></div>
 <h2 id="formTitle" class="text-[26px] font-bold mt-5">Welcome back, Troy! 👋</h2><p id="formSub" class="text-slate-500 text-sm">Login to continue your streak.</p>
@@ -57,9 +57,7 @@
 <div><label class="text-sm font-medium">Password</label><div class="relative"><input id="password" type="password" placeholder="••••••••" class="w-full border rounded-xl px-4 py-3 mt-1 outline-none focus:border-blue-500 pr-12"><button onclick="togglePass()" class="absolute right-3 top-[18px] text-sm">👁️</button></div></div>
 <p id="error" class="text-red-500 text-sm hidden"></p>
 <button onclick="submitForm()" id="submitBtn" class="w-full bg-blue-600 text-white py-3.5 rounded-full font-bold">Login →</button>
-<div class="flex items-center gap-3 text-slate-400 text-xs"><hr class="flex-1"><span>OR CONTINUE WITH</span><hr class="flex-1"></div>
-<div class="grid grid-cols-2 gap-3"><button onclick="socialLogin('Google')" class="border rounded-full py-3 font-semibold text-sm hover:border-blue-500">G &nbsp;Google</button><button onclick="socialLogin('Apple')" class="border rounded-full py-3 font-semibold text-sm">🍎 &nbsp;Apple</button></div>
-<p class="text-center text-xs text-slate-400 mt-1">Google Login works after you enable it in Supabase → Auth → Providers → Google</p>
+<div class="grid grid-cols-2 gap-3"><button onclick="socialLogin('Google')" class="border rounded-full py-3 font-semibold text-sm">G &nbsp;Google</button><button onclick="socialLogin('Apple')" class="border rounded-full py-3 font-semibold text-sm">🍎 &nbsp;Apple</button></div>
 </div></div></div></div>
 
 <!-- DASHBOARD -->
@@ -77,8 +75,8 @@
 </div></section>
 <section class="bg-[#fffbeb] border rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-4">
 <div class="flex gap-3 flex-1"><div class="w-11 h-11 bg-orange-100 rounded-full flex items-center justify-center text-xl shrink-0">👑</div>
-<div><p class="font-bold">You're on the <span id="planLabel">Free</span> Plan <span id="premiumBadge" class="hidden bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full ml-1">✅ Premium Active</span></p><p class="text-slate-600 text-[14px]" id="planDesc">Upgrade to Premium for unlimited access</p></div></div>
-<button onclick="upgrade()" id="upgradeBtn" class="bg-gradient-to-r from-orange-500 to-yellow-400 text-white font-bold px-5 py-2.5 rounded-full shrink-0">👑 Upgrade Now</button></section>
+<div><p class="font-bold">You're on the <span id="planLabel">Free</span> Plan</p><p class="text-slate-600 text-[14px]">Upgrade to Premium for unlimited access</p></div></div>
+<button onclick="upgrade()" class="bg-gradient-to-r from-orange-500 to-yellow-400 text-white font-bold px-5 py-2.5 rounded-full">👑 Upgrade Now</button></section>
 <div class="grid lg:grid-cols-[1fr_360px] gap-5 items-start">
 <section class="bg-white rounded-2xl border p-5">
 <div class="flex justify-between"><h2 class="font-bold text-[19px]">Continue Learning</h2><button onclick="showPage('courses')" class="text-blue-600 font-medium">View All</button></div>
@@ -138,39 +136,13 @@
 <div class="bg-white border rounded-2xl p-4"><p class="text-slate-500 text-sm">Total Tasks</p><p class="text-[28px] font-extrabold" id="adminTotalTasks">-</p></div>
 <div class="bg-white border rounded-2xl p-4"><p class="text-slate-500 text-sm">Your Points</p><p class="text-[28px] font-extrabold" id="adminPoints">-</p></div></div>
 <div class="bg-white border rounded-2xl overflow-hidden"><div class="p-4 flex justify-between"><h3 class="font-bold">Recent Users</h3><input id="searchUser" oninput="renderUsers()" placeholder="🔍 Search user..." class="border rounded-full px-3 py-1.5 text-sm outline-none w-[180px]"></div><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50 text-left text-slate-500"><tr><th class="px-4 py-2.5">User</th><th class="px-4 py-2.5">Plan</th><th class="px-4 py-2.5">Points</th><th class="px-4 py-2.5">Action</th></tr></thead><tbody id="userRows"></tbody></table></div></div>
-<div class="bg-white border rounded-2xl p-5"><h3 class="font-bold">💰 Recent Payments</h3><div id="paymentsList" class="space-y-2 mt-3 text-sm"><p class="text-slate-500">No payments yet. Test with 254708374149 in Sandbox.</p></div></div>
 </div>
 </main>
 
-<!-- M-PESA PAY MODAL -->
-<div id="payModal" class="hidden fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4">
-  <div class="bg-white w-full max-w-[420px] rounded-[20px] p-6">
-    <div class="flex justify-between"><h3 class="font-bold text-[20px]">👑 Upgrade to Premium</h3><button onclick="closePay()" class="text-2xl">×</button></div>
-    <p class="text-slate-500 text-sm mt-1">Unlimited AI Tutor, all subjects, certificates & no limits.</p>
-    <div class="space-y-2 mt-4">
-      <label class="flex gap-3 border rounded-2xl p-3 cursor-pointer has-[:checked]:border-green-500 has-[:checked]:bg-green-50">
-        <input type="radio" name="plan" value="monthly" checked class="accent-green-600 mt-1">
-        <div class="flex-1"><p class="font-bold">Monthly • KSh 499</p><p class="text-xs text-slate-500">Billed monthly, cancel anytime</p></div>
-      </label>
-      <label class="flex gap-3 border rounded-2xl p-3 cursor-pointer has-[:checked]:border-green-500 has-[:checked]:bg-green-50">
-        <input type="radio" name="plan" value="yearly" class="accent-green-600 mt-1">
-        <div class="flex-1"><p class="font-bold">Yearly • KSh 4,999 <span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">SAVE 17%</span></p><p class="text-xs text-slate-500">KSh 416 / month</p></div>
-      </label>
-    </div>
-    <label class="text-sm font-medium block mt-4">M-Pesa Phone Number</label>
-    <input id="mpesaPhone" placeholder="0712345678" class="w-full border rounded-xl px-4 py-3 mt-1 outline-none focus:border-green-500 text-[16px]">
-    <p id="payStatus" class="text-sm mt-2"></p>
-    <button id="payBtn" onclick="payWithMpesa()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3.5 rounded-full font-bold mt-3">Pay with M-Pesa 💚</button>
-    <p class="text-center text-xs text-slate-400 mt-2">🔒 Secure via Safaricom Daraja • You will receive STK Push</p>
-    <p class="text-center text-xs text-slate-400 mt-1">Sandbox Test: 254708374149 + PIN 1234</p>
-    <button onclick="simulatePayment()" class="w-full text-center text-xs text-blue-600 mt-2 underline">Or click here to simulate payment (Demo mode, no Daraja yet)</button>
-  </div>
-</div>
-
-<div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-3 rounded-full text-sm hidden z-[90] shadow-xl"></div>
+<div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-3 rounded-full text-sm hidden z-[70] shadow-xl"></div>
 
 <script>
-// ===== SUPABASE =====
+// ===== SUPABASE - YOUR PROJECT =====
 const SUPABASE_URL = "https://eliswitgkynbwrkuwcpu.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsaXN2aXRna3lsYndya3V3Y3B1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUxODgwMzYsImV4cCI6MjExMDc2NDAzNn0.-8qrvCOc29otLUACnUCitrByOROeTntUfBofP2Gvwok";
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -214,11 +186,12 @@ function showPage(p){
   if(p==='admin') loadAdmin();
 }
 function toggleMenu(){document.getElementById('mobileMenu').classList.toggle('hidden')}
-function showToast(m){let t=document.getElementById('toast');t.textContent=m;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),3000)}
+function showToast(m){let t=document.getElementById('toast');t.textContent=m;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),2800)}
 async function addPts(n){ pts+=n; document.getElementById('pts').textContent=pts; if(currentUser){ await supabase.from('profiles').update({points:pts}).eq('id',currentUser.id); } }
+function upgrade(){showToast('Premium checkout coming soon 👑')}
 async function logout(){ await supabase.auth.signOut(); currentUser=null; pts=0; document.getElementById('pts').textContent='0'; showPage('login'); }
 
-// ===== AUTH + GOOGLE =====
+// ===== AUTH =====
 function switchTab(m){mode=m;
   document.getElementById('loginTab').className=m==='login'?'px-6 py-2 rounded-full bg-white font-semibold shadow text-sm':'px-6 py-2 rounded-full font-semibold text-sm text-slate-500';
   document.getElementById('signupTab').className=m==='signup'?'px-6 py-2 rounded-full bg-white font-semibold shadow text-sm':'px-6 py-2 rounded-full font-semibold text-sm text-slate-500';
@@ -239,36 +212,28 @@ async function submitForm(){
   if(mode==='signup'){
     result=await supabase.auth.signUp({email,password:pass});
     if(result.error){err.textContent=result.error.message;err.classList.remove('hidden');document.getElementById('submitBtn').textContent='Create Account →';return}
-    if(result.data.user){ await supabase.from('profiles').insert([{id:result.data.user.id, full_name:name, email, role:'student', plan:'Free', points:0}]); }
+    if(result.data.user){
+      await supabase.from('profiles').insert([{id:result.data.user.id, full_name:name, email, role:'student', plan:'Free', points:0}]);
+    }
     showToast('✅ Account created! Check email to confirm, then login.');
-    document.getElementById('submitBtn').textContent='Create Account →'; switchTab('login'); return;
+    document.getElementById('submitBtn').textContent='Create Account →';
+    switchTab('login'); return;
   } else {
     result=await supabase.auth.signInWithPassword({email,password:pass});
     if(result.error){err.textContent=result.error.message;err.classList.remove('hidden');document.getElementById('submitBtn').textContent='Login →';return}
     currentUser=result.data.user;
     document.getElementById('userName').textContent=name||email.split('@')[0];
-    await loadUserData(); showToast('✅ Welcome back!');
+    await loadUserData();
+    showToast('✅ Welcome back!');
     document.getElementById('submitBtn').textContent='Login →';
     setTimeout(()=>showPage('dashboard'),600);
   }
 }
-async function socialLogin(provider){
-  if(provider==='Google'){
-    const { error } = await supabase.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.href } });
-    if(error) showToast('Google not enabled yet: ' + error.message + ' - Enable in Supabase → Auth → Providers → Google');
-    return;
-  }
-  showToast('Apple login coming soon 🍎');
-}
+function socialLogin(p){showToast('Google login: enable it in Supabase → Auth → Providers → Google')}
 async function loadUserData(){
   if(!currentUser) return;
   let {data:profile}=await supabase.from('profiles').select('*').eq('id',currentUser.id).single();
-  if(profile){
-    pts=profile.points||0; document.getElementById('pts').textContent=pts;
-    document.getElementById('planLabel').textContent=profile.plan||'Free';
-    if(profile.plan==='Premium'){ document.getElementById('premiumBadge').classList.remove('hidden'); document.getElementById('upgradeBtn').textContent='✅ Premium Active'; document.getElementById('planDesc').textContent='Unlimited access unlocked 👑'; }
-    if(profile.full_name) document.getElementById('userName').textContent=profile.full_name.split(' ')[0];
-  }
+  if(profile){ pts=profile.points||0; document.getElementById('pts').textContent=pts; document.getElementById('planLabel').textContent=profile.plan||'Free'; if(profile.full_name) document.getElementById('userName').textContent=profile.full_name.split(' ')[0]; }
   let {data:dbCourses}=await supabase.from('courses').select('*');
   if(dbCourses && dbCourses.length>0){
     let {data:prog}=await supabase.from('user_progress').select('*').eq('user_id',currentUser.id);
@@ -289,17 +254,8 @@ async function saveProgress(courseTitle,newProg){
   await supabase.from('profiles').update({points:pts}).eq('id',currentUser.id);
 }
 supabase.auth.onAuthStateChange(async (e,session)=>{
-  if(session?.user){
-    currentUser=session.user;
-    document.getElementById('dbStatus').textContent='✅ Connected to Supabase';
-    // Create profile if Google first login
-    let {data:existing}=await supabase.from('profiles').select('*').eq('id',session.user.id).single();
-    if(!existing){
-      await supabase.from('profiles').insert([{id:session.user.id, full_name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || 'Student', email: session.user.email, role:'student', plan:'Free', points:0}]);
-    }
-    await loadUserData();
-    if(document.getElementById('page-login').classList.contains('active')) showPage('dashboard');
-  } else { document.getElementById('dbStatus').textContent='✅ Connected - Please login'; }
+  if(session?.user){ currentUser=session.user; document.getElementById('dbStatus').textContent='✅ Connected to Supabase'; await loadUserData(); }
+  else { document.getElementById('dbStatus').textContent='✅ Connected - Please login'; }
 });
 
 // ===== DASHBOARD =====
@@ -315,7 +271,7 @@ function answerQuiz(el,ok){document.getElementById('quizResult').textContent=ok?
 function genPlan(){document.getElementById('insight').textContent='New plan! Focus on Filtering today. Predicted score now 84%.';showToast('✨ New AI Plan Generated!')}
 
 // ===== TUTORS =====
-function renderTutors(){let q=(document.getElementById('searchTutor').value||'').toLowerCase();let list=tutors.filter(t=>(t.name+t.subject).toLowerCase().includes(q));document.getElementById('tutorGrid').innerHTML=list.map(t=>`<div class="bg-white border rounded-2xl p-5 card-hover"><div class="flex gap-3"><div class="w-14 h-14 ${t.color} rounded-2xl flex items-center justify-center text-3xl shrink-0">${t.avatar}</div><div><p class="font-bold">${t.name}</p><p class="text-slate-500 text-sm">${t.subject}</p><p class="text-sm mt-1">⭐ ${t.rating} • ${t.students} • <b>${t.price}</b></p></div></div><p class="text-slate-600 text-sm mt-3">${t.desc}</p><div class="flex gap-2 mt-4"><button onclick="showToast('Chat with ${t.name} - use AI Tutor on Dashboard')" class="flex-1 bg-blue-600 text-white py-2.5 rounded-full font-semibold text-sm">💬 Chat Now</button><button onclick="showToast('📅 Booked with ${t.name}!');addPts(5)" class="flex-1 border py-2.5 rounded-full font-semibold text-sm">📅 Book</button></div></div>`).join('')}
+function renderTutors(){let q=(document.getElementById('searchTutor').value||'').toLowerCase();let list=tutors.filter(t=>(t.name+t.subject).toLowerCase().includes(q));document.getElementById('tutorGrid').innerHTML=list.map(t=>`<div class="bg-white border rounded-2xl p-5 card-hover"><div class="flex gap-3"><div class="w-14 h-14 ${t.color} rounded-2xl flex items-center justify-center text-3xl shrink-0">${t.avatar}</div><div><p class="font-bold">${t.name}</p><p class="text-slate-500 text-sm">${t.subject}</p><p class="text-sm mt-1">⭐ ${t.rating} • ${t.students} • <b>${t.price}</b></p></div></div><p class="text-slate-600 text-sm mt-3">${t.desc}</p><div class="flex gap-2 mt-4"><button onclick="showToast('Chat with ${t.name} - use AI Tutor on Dashboard for now')" class="flex-1 bg-blue-600 text-white py-2.5 rounded-full font-semibold text-sm">💬 Chat Now</button><button onclick="showToast('📅 Booked with ${t.name}!');addPts(5)" class="flex-1 border py-2.5 rounded-full font-semibold text-sm">📅 Book</button></div></div>`).join('')}
 
 // ===== CALENDAR =====
 function renderCal(){
@@ -333,7 +289,7 @@ async function addTask(){
   let v=document.getElementById('newTask').value.trim(); if(!v){v=prompt('Task name:'); if(!v) return}
   let newTask={day:selectedDay,title:v,time:'5:00 PM',done:false};
   if(currentUser){ let {data}=await supabase.from('tasks').insert([{user_id:currentUser.id,title:v,day:selectedDay,time:'5:00 PM',done:false}]).select().single(); if(data) newTask.id=data.id; }
-  tasks.push(newTask); document.getElementById('newTask').value=''; renderCal(); showToast('Task saved ✅');
+  tasks.push(newTask); document.getElementById('newTask').value=''; renderCal(); showToast('Task saved to Supabase ✅');
 }
 function autoSchedule(){ tasks.push({day:25,title:'AI: Revise Filtering (Weak)',time:'9:00 AM',done:false}); renderCal(); showToast('✨ AI scheduled Filtering on Wed 9am'); }
 
@@ -348,78 +304,21 @@ async function continueCourse(title){
   await addPts(10); await saveProgress(title,newProg); renderCourses(); renderDashCourses(); showToast(`Progress saved: ${title} now ${newProg}% ✅`);
 }
 
-// ===== M-PESA =====
-function upgrade(){ document.getElementById('payModal').classList.remove('hidden'); }
-function closePay(){ document.getElementById('payModal').classList.add('hidden'); }
-async function payWithMpesa(){
-  let phone=document.getElementById('mpesaPhone').value.trim();
-  let plan=document.querySelector('input[name="plan"]:checked')?.value || 'monthly';
-  let amount=plan==='yearly'?4999:499;
-  if(!phone.match(/^(07|01|2547|2541)\d{8}$/) && !phone.match(/^254\d{9}$/)){ showToast('⚠ Enter valid number: 0712345678'); return; }
-  if(!currentUser){ showToast('Please login first'); showPage('login'); return; }
-  document.getElementById('payBtn').textContent='Sending STK Push...'; document.getElementById('payBtn').disabled=true;
-  document.getElementById('payStatus').textContent='⏳ Sending STK Push to '+phone+'...';
-  try{
-    const res=await fetch('https://eliswitgkynbwrkuwcpu.supabase.co/functions/v1/mpesa-stk',{
-      method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_KEY}`},
-      body: JSON.stringify({phone, amount, user_id: currentUser.id, plan})
-    });
-    const data=await res.json(); console.log('MPESA:',data);
-    if(data.ResponseCode==='0'){
-      showToast('📱 Check your phone! Enter M-Pesa PIN.');
-      document.getElementById('payStatus').textContent='⏳ Waiting for M-Pesa PIN... Check your phone.';
-      document.getElementById('payStatus').className='text-orange-600 text-sm font-semibold mt-2';
-    } else {
-      // If Edge Function not deployed yet, fall back to demo
-      showToast('Edge Function not deployed yet - use Demo mode below');
-      document.getElementById('payStatus').textContent='⚠ Deploy mpesa-stk Edge Function to enable real STK Push. Use Demo mode for now.';
-    }
-  } catch(e){
-    document.getElementById('payStatus').textContent='⚠ Edge Function not found. Click "Simulate payment" for demo.';
-    showToast('Demo mode: click Simulate payment');
-  }
-  document.getElementById('payBtn').textContent='Pay with M-Pesa 💚'; document.getElementById('payBtn').disabled=false;
-}
-async function simulatePayment(){
-  let plan=document.querySelector('input[name="plan"]:checked')?.value || 'monthly';
-  let amount=plan==='yearly'?4999:499;
-  let phone=document.getElementById('mpesaPhone').value.trim() || '0712345678';
-  document.getElementById('payStatus').textContent='⏳ Simulating M-Pesa... Check phone...';
-  setTimeout(async ()=>{
-    if(currentUser){
-      await supabase.from('profiles').update({plan:'Premium'}).eq('id',currentUser.id);
-      try{ await supabase.from('payments').insert([{user_id:currentUser.id, phone, amount, plan, status:'completed'}]); }catch(e){}
-    }
-    document.getElementById('planLabel').textContent='Premium';
-    document.getElementById('premiumBadge').classList.remove('hidden');
-    document.getElementById('upgradeBtn').textContent='✅ Premium Active';
-    document.getElementById('planDesc').textContent='Unlimited access unlocked 👑';
-    document.getElementById('payStatus').textContent='✅ Payment successful! You are now Premium 👑';
-    document.getElementById('payStatus').className='text-green-600 text-sm font-semibold mt-2';
-    showToast('🎉 Welcome to Premium! Unlimited access unlocked.');
-    setTimeout(()=>closePay(),2000);
-  },2000);
-}
-
 // ===== ADMIN =====
 async function loadAdmin(){
   let {data:profiles}=await supabase.from('profiles').select('*').order('created_at',{ascending:false});
   let {data:allCourses}=await supabase.from('courses').select('*');
   let {data:allTasks}=await supabase.from('tasks').select('*');
-  let {data:payments}=await supabase.from('payments').select('*').order('created_at',{ascending:false}).limit(5);
   users=profiles||[];
   document.getElementById('adminTotalUsers').textContent=users.length;
   document.getElementById('adminTotalCourses').textContent=(allCourses||[]).length;
   document.getElementById('adminTotalTasks').textContent=(allTasks||[]).length;
   document.getElementById('adminPoints').textContent=pts;
-  if(payments && payments.length>0){
-    document.getElementById('paymentsList').innerHTML=payments.map(p=>`<div class="flex justify-between bg-green-50 rounded-xl p-3"><span>💚 ${p.phone} • ${p.plan}</span><span class="font-bold">KSh ${p.amount} • ${p.status}</span></div>`).join('');
-  }
   renderUsers();
 }
 function renderUsers(){
-  let q=(document.getElementById('searchUser').value||'').toLowerCase(); let list=users.filter(u=>((u.full_name||'')+(u.email||'')).toLowerCase().includes(q));
-  document.getElementById('userRows').innerHTML=list.map(u=>`<tr class="border-t"><td class="px-4 py-3"><p class="font-semibold">${u.full_name||'No name'}</p><p class="text-slate-500 text-xs">${u.email||''}</p></td><td class="px-4 py-3"><span class="${u.plan==='Premium'?'bg-yellow-100 text-yellow-800':'bg-slate-100 text-slate-600'} px-2 py-1 rounded-full text-xs font-semibold">${u.plan||'Free'}</span></td><td class="px-4 py-3 font-semibold">${u.points||0} pts</td><td class="px-4 py-3"><button onclick="togglePlan('${u.id}')" class="text-blue-600 font-semibold text-xs">Upgrade</button> <button onclick="deleteUser('${u.id}')" class="text-red-600 font-semibold text-xs ml-2">Delete</button></td></tr>`).join('') || '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-500">No users yet.</td></tr>';
+  let q=(document.getElementById('searchUser').value||'').toLowerCase(); let list=users.filter(u=>((u.full_name||'')+ (u.email||'')).toLowerCase().includes(q));
+  document.getElementById('userRows').innerHTML=list.map(u=>`<tr class="border-t"><td class="px-4 py-3"><p class="font-semibold">${u.full_name||'No name'}</p><p class="text-slate-500 text-xs">${u.email||''}</p></td><td class="px-4 py-3"><span class="${u.plan==='Premium'?'bg-yellow-100 text-yellow-800':'bg-slate-100 text-slate-600'} px-2 py-1 rounded-full text-xs font-semibold">${u.plan||'Free'}</span></td><td class="px-4 py-3 font-semibold">${u.points||0} pts</td><td class="px-4 py-3"><button onclick="togglePlan('${u.id}')" class="text-blue-600 font-semibold text-xs">Upgrade</button> <button onclick="deleteUser('${u.id}')" class="text-red-600 font-semibold text-xs ml-2">Delete</button></td></tr>`).join('') || '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-500">No users yet. Sign up to create one.</td></tr>';
 }
 async function togglePlan(id){ let u=users.find(x=>x.id===id); if(!u) return; let newPlan=u.plan==='Premium'?'Free':'Premium'; await supabase.from('profiles').update({plan:newPlan}).eq('id',id); u.plan=newPlan; renderUsers(); showToast(u.full_name+' now '+newPlan); }
 async function deleteUser(id){ if(!confirm('Delete this user profile?')) return; await supabase.from('profiles').delete().eq('id',id); users=users.filter(u=>u.id!==id); renderUsers(); showToast('User deleted'); }
