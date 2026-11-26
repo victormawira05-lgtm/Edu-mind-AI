@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduMind AI - Learn Smarter</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{font-family:'Inter',sans-serif}
+.page{display:none}.page.active{display:block}
+.nav-link.active{color:#2563eb;font-weight:600}
+.card-hover{transition:.2s}.card-hover:hover{transform:translateY(-2px);box-shadow:0 10px 25px rgba(0,0,0,.08)}
+.progress{height:8px;border-radius:999px;background:#e5e7eb;overflow:hidden}.progress>div{height:100%;border-radius:999px}
+.no-scrollbar::-webkit-scrollbar{display:none}
+</style>
+</head>
+<body class="bg-[#f8fafc] text-slate-900">
+
+<header id="navbar" class="bg-white sticky top-0 z-50 border-b">
+<div class="max-w-[1280px] mx-auto px-4 h-[68px] flex items-center gap-6">
+<div class="flex items-center gap-2 shrink-0 cursor-pointer" onclick="showPage('dashboard')">
+<div class="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white text-xl">🧠</div>
+<div class="leading-none font-extrabold text-[19px]">EduMind<br>AI</div></div>
+<nav class="hidden lg:flex items-center gap-5 text-[15px] text-slate-600 flex-1">
+<a href="#" onclick="showPage('dashboard');return false" data-nav="dashboard" class="nav-link active">Dashboard</a>
+<a href="#" onclick="showPage('recommendations');return false" data-nav="recommendations" class="nav-link hover:text-blue-600">AI Recommendations</a>
+<a href="#" onclick="showPage('tutors');return false" data-nav="tutors" class="nav-link hover:text-blue-600">Subject Tutors</a>
+<a href="#" onclick="showPage('calendar');return false" data-nav="calendar" class="nav-link hover:text-blue-600">Study Calendar</a>
+<a href="#" onclick="showPage('courses');return false" data-nav="courses" class="nav-link hover:text-blue-600">My Courses</a>
+</nav>
+<div class="flex items-center gap-2 ml-auto">
+<div class="hidden sm:flex bg-orange-100 text-orange-700 px-3 py-1.5 rounded-full text-[13px] font-semibold">🔥 <span id="streak">0</span> streak</div>
+<div class="flex bg-yellow-100 text-yellow-800 px-3 py-1.5 rounded-full text-[13px] font-semibold">⭐ <span id="pts">0</span> pts</div>
+<button onclick="showPage('admin')" class="hidden md:block bg-red-600 text-white px-3 py-1.5 rounded-full text-[13px] font-semibold">👑 Admin</button>
+<button onclick="toggleMenu()" class="lg:hidden w-9 h-9 border rounded-lg">☰</button>
+</div></div>
+<div id="mobileMenu" class="hidden lg:hidden px-4 pb-4 flex flex-col gap-2">
+<a href="#" onclick="showPage('dashboard')">Dashboard</a><a href="#" onclick="showPage('recommendations')">AI Recommendations</a><a href="#" onclick="showPage('tutors')">Subject Tutors</a><a href="#" onclick="showPage('calendar')">Study Calendar</a><a href="#" onclick="showPage('courses')">My Courses</a><a href="#" onclick="showPage('admin')">👑 Admin</a><a href="#" onclick="logout()">Logout</a>
+</div></header>
+
+<main class="max-w-[1280px] mx-auto px-4 py-5">
+
+<!-- LOGIN -->
+<div id="page-login" class="page">
+<div class="w-full max-w-[920px] mx-auto bg-white rounded-[24px] shadow-xl overflow-hidden grid md:grid-cols-2">
+<div class="bg-blue-600 p-8 text-white hidden md:flex flex-col justify-between">
+<div><div class="flex items-center gap-2"><div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-2xl">🧠</div><span class="font-extrabold text-xl leading-none">EduMind<br>AI</span></div>
+<h1 class="text-[32px] font-bold leading-tight mt-10">Learn smarter,<br>not harder.</h1><p class="text-blue-100 mt-3">Personalized AI tutor, courses & progress tracking — all in one place.</p></div>
+<div class="bg-white/15 rounded-2xl p-3 text-sm">⭐ <b>4.9/5</b> — Loved by 12,000+ students in Kenya • <span id="dbStatus" class="text-yellow-200">Connecting...</span></div></div>
+<div class="p-6 sm:p-8">
+<div class="flex bg-slate-100 rounded-full p-1 w-fit"><button id="loginTab" onclick="switchTab('login')" class="px-6 py-2 rounded-full bg-white font-semibold shadow text-sm">Login</button><button id="signupTab" onclick="switchTab('signup')" class="px-6 py-2 rounded-full font-semibold text-sm text-slate-500">Sign Up</button></div>
+<h2 id="formTitle" class="text-[26px] font-bold mt-5">Welcome back, Troy! 👋</h2><p id="formSub" class="text-slate-500 text-sm">Login to continue your streak.</p>
+<div class="space-y-3 mt-5">
+<div id="nameField" class="hidden"><label class="text-sm font-medium">Full Name</label><input id="name" placeholder="e.g. Troy Mwira" class="w-full border rounded-xl px-4 py-3 mt-1 outline-none focus:border-blue-500"></div>
+<div><label class="text-sm font-medium">Email</label><input id="email" type="email" placeholder="troy@example.com" class="w-full border rounded-xl px-4 py-3 mt-1 outline-none focus:border-blue-500"></div>
+<div><label class="text-sm font-medium">Password</label><div class="relative"><input id="password" type="password" placeholder="••••••••" class="w-full border rounded-xl px-4 py-3 mt-1 outline-none focus:border-blue-500 pr-12"><button onclick="togglePass()" class="absolute right-3 top-[18px] text-sm">👁️</button></div></div>
+<p id="error" class="text-red-500 text-sm hidden"></p>
+<button onclick="submitForm()" id="submitBtn" class="w-full bg-blue-600 text-white py-3.5 rounded-full font-bold">Login →</button>
+<div class="flex items-center gap-3 text-slate-400 text-xs"><hr class="flex-1"><span>OR CONTINUE WITH</span><hr class="flex-1"></div>
+<div class="grid grid-cols-2 gap-3"><button onclick="socialLogin('Google')" class="border rounded-full py-3 font-semibold text-sm hover:border-blue-500">G &nbsp;Google</button><button onclick="socialLogin('Apple')" class="border rounded-full py-3 font-semibold text-sm">🍎 &nbsp;Apple</button></div>
+<p class="text-center text-xs text-slate-400 mt-1">Google Login works after you enable it in Supabase → Auth → Providers → Google</p>
+</div></div></div></div>
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page active space-y-5">
+<section class="bg-[#2563eb] rounded-[18px] p-5 sm:p-7 text-white relative overflow-hidden">
+<h1 class="text-[28px] sm:text-[32px] font-bold">Good evening, <span id="userName">Troy</span>! 🌟</h1>
+<p class="text-blue-100 mt-1">Ready to continue? You're doing amazing!</p>
+<div class="flex flex-wrap gap-2.5 mt-4">
+<button onclick="showPage('recommendations')" class="bg-white/20 border border-white/20 px-4 py-2.5 rounded-full font-semibold">🧠 View AI Recommendations</button>
+<button onclick="showPage('admin')" class="bg-red-600 px-4 py-2.5 rounded-full font-semibold">👑 Admin Dashboard</button>
+</div>
+<div class="flex flex-wrap gap-3 mt-5">
+<div class="bg-white/20 rounded-2xl px-4 py-3 min-w-[180px]"><p class="text-blue-100 text-sm">This Week</p><p class="font-bold">4/5 Goals Completed</p></div>
+<div class="bg-white/20 rounded-2xl px-4 py-3 min-w-[140px]"><p class="text-blue-100 text-sm">Level</p><p class="font-bold">Beginner</p></div>
+</div></section>
+<section class="bg-[#fffbeb] border rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-4">
+<div class="flex gap-3 flex-1"><div class="w-11 h-11 bg-orange-100 rounded-full flex items-center justify-center text-xl shrink-0">👑</div>
+<div><p class="font-bold">You're on the <span id="planLabel">Free</span> Plan <span id="premiumBadge" class="hidden bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full ml-1">✅ Premium Active</span></p><p class="text-slate-600 text-[14px]" id="planDesc">Upgrade to Premium for unlimited access</p></div></div>
+<button onclick="upgrade()" id="upgradeBtn" class="bg-gradient-to-r from-orange-500 to-yellow-400 text-white font-bold px-5 py-2.5 rounded-full shrink-0">👑 Upgrade Now</button></section>
+<div class="grid lg:grid-cols-[1fr_360px] gap-5 items-start">
+<section class="bg-white rounded-2xl border p-5">
+<div class="flex justify-between"><h2 class="font-bold text-[19px]">Continue Learning</h2><button onclick="showPage('courses')" class="text-blue-600 font-medium">View All</button></div>
+<div id="dashCourses" class="mt-4 space-y-3"></div></section>
+<section class="bg-white rounded-2xl border overflow-hidden">
+<div class="p-4 flex items-center gap-3 border-b"><div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center text-white">🤖</div><div><p class="font-bold">AI Tutor</p><p class="text-green-600 text-sm">● Online</p></div><span class="ml-auto bg-blue-50 text-blue-600 text-xs px-2 py-1 rounded-full">GPT • Ready</span></div>
+<div id="chat" class="p-4 h-[220px] overflow-y-auto space-y-3 bg-slate-50/50"><div class="bg-white border rounded-2xl rounded-tl-md p-3 text-[14px] max-w-[90%]">Hi Troy! I'm your AI tutor. What would you like to work on today?</div></div>
+<div class="p-3 flex gap-2 border-t"><input id="chatInput" onkeydown="if(event.key==='Enter') sendMsg()" placeholder="Ask AI Tutor anything..." class="flex-1 border rounded-full px-4 py-2.5 text-sm outline-none"><button onclick="sendMsg()" class="w-10 h-10 bg-blue-600 text-white rounded-full">💬</button></div>
+<div class="px-3 pb-3 flex gap-2 overflow-x-auto no-scrollbar"><button onclick="quickAsk('Explain Algebra')" class="whitespace-nowrap bg-slate-100 text-xs px-3 py-1.5 rounded-full">Explain Algebra</button><button onclick="quickAsk('Quiz me on BCE 211')" class="whitespace-nowrap bg-slate-100 text-xs px-3 py-1.5 rounded-full">Quiz me on BCE 211</button></div>
+</section></div>
+<section><h2 class="font-bold text-[19px] mb-3">Explore Subjects</h2><div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="subjects"></div></section>
+</div>
+
+<!-- RECOMMENDATIONS -->
+<div id="page-recommendations" class="page space-y-5">
+<section class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-[18px] p-6 text-white flex flex-col md:flex-row justify-between gap-4">
+<div><h1 class="text-[28px] font-bold">🧠 Your AI Study Plan</h1><p class="text-blue-100">Based on progress, weak topics & exam date.</p></div>
+<button onclick="genPlan()" class="bg-white text-blue-700 font-bold px-5 py-3 rounded-full self-start md:self-center">✨ Regenerate Plan</button></section>
+<div class="grid lg:grid-cols-[1fr_340px] gap-5 items-start">
+<div class="space-y-4"><h2 class="font-bold text-[19px]">Today's Priority</h2><div id="recList" class="space-y-3"></div>
+<section class="bg-white rounded-2xl border p-5"><h3 class="font-bold">🎯 AI Quiz - BCE 211</h3><p class="text-slate-500 text-sm mt-1">What is LBP for centre 4 with neighbours [5,8,1,5,1,3,7,2]?</p>
+<div class="grid grid-cols-2 gap-2 mt-3"><button onclick="answerQuiz(this,true)" class="border rounded-xl py-2.5">A. 23</button><button onclick="answerQuiz(this,false)" class="border rounded-xl py-2.5">B. 82</button><button onclick="answerQuiz(this,false)" class="border rounded-xl py-2.5">C. 161</button><button onclick="answerQuiz(this,false)" class="border rounded-xl py-2.5">D. 255</button></div><p id="quizResult" class="mt-2 text-sm font-semibold"></p></section></div>
+<div class="space-y-4"><div class="bg-white rounded-2xl border p-5"><h3 class="font-bold">📈 Predicted Score</h3><div class="text-center my-3"><span class="text-[48px] font-extrabold text-blue-600">78%</span></div><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-blue-600" style="width:78%"></div></div></div>
+<div class="bg-[#fffbeb] border rounded-2xl p-5"><h3 class="font-bold">💡 AI Insight</h3><p class="text-sm text-slate-600 mt-1" id="insight">Strong in Algebra (75%) but weak in Filtering (40%). Spend 20 mins on Median vs Gaussian today.</p></div></div>
+</div></div>
+
+<!-- TUTORS -->
+<div id="page-tutors" class="page space-y-5">
+<section class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-[18px] p-6 text-white"><h1 class="text-[28px] font-bold">👩‍🏫 Subject Tutors</h1><p class="text-blue-100">Chat with AI tutors or book a live human tutor.</p></section>
+<input id="searchTutor" oninput="renderTutors()" placeholder="🔍 Search tutor..." class="w-full border rounded-full px-5 py-3 bg-white outline-none">
+<div id="tutorGrid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div></div>
+
+<!-- CALENDAR -->
+<div id="page-calendar" class="page space-y-5">
+<section class="bg-blue-600 rounded-[18px] p-6 text-white flex flex-col md:flex-row justify-between gap-4"><div><h1 class="text-[28px] font-bold">🗓 Study Calendar</h1><p class="text-blue-100">Plan your week. Saved to Supabase.</p></div><div class="flex gap-2"><button onclick="addTask()" class="bg-white text-blue-700 font-bold px-5 py-2.5 rounded-full">+ Add Task</button><button onclick="autoSchedule()" class="bg-white/20 border border-white/30 font-bold px-5 py-2.5 rounded-full">✨ AI Auto-Schedule</button></div></section>
+<div class="grid lg:grid-cols-[1fr_320px] gap-5 items-start">
+<div class="bg-white rounded-2xl border p-4"><h2 class="font-bold text-[18px] mb-3">This Week • Nov 23 - 29, 2026</h2><div class="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-slate-500 mb-1"><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span></div><div id="calGrid" class="grid grid-cols-7 gap-1"></div></div>
+<div class="bg-white rounded-2xl border p-5"><h3 class="font-bold">📋 Tasks • <span id="todayCount">3</span></h3><div id="taskList" class="space-y-2 mt-3"></div><div class="flex gap-2 mt-3"><input id="newTask" placeholder="New task..." class="flex-1 border rounded-full px-4 py-2 text-sm outline-none"><button onclick="addTask()" class="bg-blue-600 text-white px-4 rounded-full font-bold">+</button></div></div>
+</div></div>
+
+<!-- COURSES -->
+<div id="page-courses" class="page space-y-5">
+<section class="bg-white rounded-2xl border p-5 grid md:grid-cols-4 gap-4">
+<div><p class="text-slate-500 text-sm">Overall Progress</p><p class="text-[28px] font-extrabold" id="overallPct">68%</p><div class="h-2 bg-slate-100 rounded-full overflow-hidden mt-1"><div id="overallBar" class="h-full bg-blue-600" style="width:68%"></div></div></div>
+<div class="text-center bg-blue-50 rounded-xl p-3"><p class="text-2xl font-bold text-blue-600" id="enrolledCount">6</p><p class="text-xs text-slate-500">Enrolled</p></div>
+<div class="text-center bg-green-50 rounded-xl p-3"><p class="text-2xl font-bold text-green-600">8</p><p class="text-xs text-slate-500">Completed</p></div>
+<div class="text-center bg-purple-50 rounded-xl p-3"><p class="text-2xl font-bold text-purple-600">4</p><p class="text-xs text-slate-500">Certificates</p></div></section>
+<input id="searchCourse" oninput="renderCourses()" placeholder="🔍 Search courses..." class="w-full border rounded-full px-5 py-3 bg-white outline-none">
+<div id="courseGrid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div></div>
+
+<!-- ADMIN -->
+<div id="page-admin" class="page space-y-5">
+<section class="bg-slate-900 text-white rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-4"><div><h1 class="text-[26px] font-bold">Welcome back, Admin Troy 👑</h1><p class="text-slate-400">Live data from Supabase.</p></div><button onclick="addUser()" class="bg-blue-600 text-white px-4 py-2.5 rounded-full font-semibold self-start">+ Add User</button></section>
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+<div class="bg-white border rounded-2xl p-4"><p class="text-slate-500 text-sm">Total Users</p><p class="text-[28px] font-extrabold" id="adminTotalUsers">-</p></div>
+<div class="bg-white border rounded-2xl p-4"><p class="text-slate-500 text-sm">Total Courses</p><p class="text-[28px] font-extrabold" id="adminTotalCourses">-</p></div>
+<div class="bg-white border rounded-2xl p-4"><p class="text-slate-500 text-sm">Total Tasks</p><p class="text-[28px] font-extrabold" id="adminTotalTasks">-</p></div>
+<div class="bg-white border rounded-2xl p-4"><p class="text-slate-500 text-sm">Your Points</p><p class="text-[28px] font-extrabold" id="adminPoints">-</p></div></div>
+<div class="bg-white border rounded-2xl overflow-hidden"><div class="p-4 flex justify-between"><h3 class="font-bold">Recent Users</h3><input id="searchUser" oninput="renderUsers()" placeholder="🔍 Search user..." class="border rounded-full px-3 py-1.5 text-sm outline-none w-[180px]"></div><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50 text-left text-slate-500"><tr><th class="px-4 py-2.5">User</th><th class="px-4 py-2.5">Plan</th><th class="px-4 py-2.5">Points</th><th class="px-4 py-2.5">Action</th></tr></thead><tbody id="userRows"></tbody></table></div></div>
+<div class="bg-white border rounded-2xl p-5"><h3 class="font-bold">💰 Recent Payments</h3><div id="paymentsList" class="space-y-2 mt-3 text-sm"><p class="text-slate-500">No payments yet. Test with 254708374149 in Sandbox.</p></div></div>
+</div>
+</main>
+
+<!-- M-PESA PAY MODAL -->
+<div id="payModal" class="hidden fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4">
+  <div class="bg-white w-full max-w-[420px] rounded-[20px] p-6">
+    <div class="flex justify-between"><h3 class="font-bold text-[20px]">👑 Upgrade to Premium</h3><button onclick="closePay()" class="text-2xl">×</button></div>
+    <p class="text-slate-500 text-sm mt-1">Unlimited AI Tutor, all subjects, certificates & no limits.</p>
+    <div class="space-y-2 mt-4">
+      <label class="flex gap-3 border rounded-2xl p-3 cursor-pointer has-[:checked]:border-green-500 has-[:checked]:bg-green-50">
+        <input type="radio" name="plan" value="monthly" checked class="accent-green-600 mt-1">
+        <div class="flex-1"><p class="font-bold">Monthly • KSh 499</p><p class="text-xs text-slate-500">Billed monthly, cancel anytime</p></div>
+      </label>
+      <label class="flex gap-3 border rounded-2xl p-3 cursor-pointer has-[:checked]:border-green-500 has-[:checked]:bg-green-50">
+        <input type="radio" name="plan" value="yearly" class="accent-green-600 mt-1">
+        <div class="flex-1"><p class="font-bold">Yearly • KSh 4,999 <span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">SAVE 17%</span></p><p class="text-xs text-slate-500">KSh 416 / month</p></div>
+      </label>
+    </div>
+    <label class="text-sm font-medium block mt-4">M-Pesa Phone Number</label>
+    <input id="mpesaPhone" placeholder="0712345678" class="w-full border rounded-xl px-4 py-3 mt-1 outline-none focus:border-green-500 text-[16px]">
+    <p id="payStatus" class="text-sm mt-2"></p>
+    <button id="payBtn" onclick="payWithMpesa()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3.5 rounded-full font-bold mt-3">Pay with M-Pesa 💚</button>
+    <p class="text-center text-xs text-slate-400 mt-2">🔒 Secure via Safaricom Daraja • You will receive STK Push</p>
+    <p class="text-center text-xs text-slate-400 mt-1">Sandbox Test: 254708374149 + PIN 1234</p>
+    <button onclick="simulatePayment()" class="w-full text-center text-xs text-blue-600 mt-2 underline">Or click here to simulate payment (Demo mode, no Daraja yet)</button>
+  </div>
+</div>
+
+<div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-3 rounded-full text-sm hidden z-[90] shadow-xl"></div>
+
+<script>
+// ===== SUPABASE =====
+const SUPABASE_URL = "https://eliswitgkynbwrkuwcpu.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsaXN2aXRna3lsYndya3V3Y3B1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUxODgwMzYsImV4cCI6MjExMDc2NDAzNn0.-8qrvCOc29otLUACnUCitrByOROeTntUfBofP2Gvwok";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let currentUser = null, pts = 0, mode = 'login', selectedDay = 24;
+let tasks = [{day:23,title:'CV - LBP Practice',time:'9:00 AM',done:true},{day:24,title:'Algebra Quiz Ch.3',time:'2:00 PM',done:false},{day:24,title:'Python - OpenCV Filters',time:'4:00 PM',done:false},{day:27,title:'BCE 211 CAT 1',time:'9:00 AM',done:false}];
+let users = [];
+let tutors = [
+{type:'AI',name:'Nova - Maths AI',subject:'Mathematics • Algebra',avatar:'🧮',rating:4.9,students:'12k',price:'Free',desc:'Linear equations, calculus, statistics.',color:'bg-blue-500'},
+{type:'AI',name:'Pixel - CV AI',subject:'Computer Vision • BCE 211',avatar:'💻',rating:5.0,students:'8k',price:'Free',desc:'LBP, Filtering, YOLO, Segmentation.',color:'bg-purple-500'},
+{type:'AI',name:'Data - Python AI',subject:'Data Science • Python',avatar:'📊',rating:4.8,students:'10k',price:'Free',desc:'Pandas, NumPy, ML, visualization.',color:'bg-orange-500'},
+{type:'Human',name:'Ms. Wanjiru',subject:'Mathematics • Physics',avatar:'👩‍🏫',rating:4.9,students:'240',price:'KSh 500 / hr',desc:'Zetech lecturer. 8 yrs experience.',color:'bg-green-500'},
+{type:'Human',name:'Mr. Otieno',subject:'Computer Science • CV',avatar:'👨‍🏫',rating:4.8,students:'180',price:'KSh 800 / hr',desc:'Ex-Google. Teaches CV & ML projects.',color:'bg-indigo-500'},
+{type:'Human',name:'Ms. Achieng',subject:'English • Communication',avatar:'👩‍🏫',rating:4.9,students:'320',price:'KSh 400 / hr',desc:'Essay, grammar, presentation skills.',color:'bg-pink-500'},
+];
+let courses = [
+{icon:'🧮',title:'Algebra: Linear Equations',cat:'Mathematics',prog:75,lessons:'12/16 lessons',time:'15 min left',color:'bg-blue-500'},
+{icon:'💻',title:'Computer Vision: LBP & Filtering',cat:'Computer Science',prog:60,lessons:'6/10 lessons',time:'20 min left',color:'bg-purple-500'},
+{icon:'📊',title:'Python for Data Science',cat:'Data Science',prog:40,lessons:'8/20 lessons',time:'30 min left',color:'bg-orange-500'},
+{icon:'🔬',title:'Physics: Mechanics',cat:'Science',prog:100,lessons:'10/10 lessons',time:'Completed',color:'bg-green-500'},
+{icon:'📚',title:'English Grammar',cat:'English',prog:100,lessons:'15/15 lessons',time:'Completed',color:'bg-pink-500'},
+{icon:'🧠',title:'AI & ML Basics',cat:'AI',prog:20,lessons:'2/10 lessons',time:'45 min left',color:'bg-indigo-500'},
+];
+let recs = [
+{icon:'💻',title:'Computer Vision: LBP Practice',why:'60% • Exam topic',time:'20 min',tag:'HIGH PRIORITY',tagC:'bg-red-100 text-red-700',prog:60},
+{icon:'🧮',title:'Algebra: Linear Equations Quiz',why:'75% • Almost done',time:'15 min',tag:'QUICK WIN',tagC:'bg-green-100 text-green-700',prog:75},
+{icon:'📊',title:'Python: Filtering with OpenCV',why:'40% • Weak topic',time:'25 min',tag:'RECOMMENDED',tagC:'bg-blue-100 text-blue-700',prog:40}
+];
+
+// ===== NAV =====
+function showPage(p){
+  document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  document.querySelectorAll('.nav-link').forEach(a=>a.classList.remove('active'));
+  let nav=document.querySelector(`[data-nav="${p}"]`); if(nav) nav.classList.add('active');
+  document.getElementById('navbar').style.display = p==='login' ? 'none' : 'block';
+  document.getElementById('mobileMenu').classList.add('hidden');
+  window.scrollTo(0,0);
+  if(p==='tutors') renderTutors();
+  if(p==='courses') renderCourses();
+  if(p==='calendar') renderCal();
+  if(p==='admin') loadAdmin();
+}
+function toggleMenu(){document.getElementById('mobileMenu').classList.toggle('hidden')}
+function showToast(m){let t=document.getElementById('toast');t.textContent=m;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),3000)}
+async function addPts(n){ pts+=n; document.getElementById('pts').textContent=pts; if(currentUser){ await supabase.from('profiles').update({points:pts}).eq('id',currentUser.id); } }
+async function logout(){ await supabase.auth.signOut(); currentUser=null; pts=0; document.getElementById('pts').textContent='0'; showPage('login'); }
+
+// ===== AUTH + GOOGLE =====
+function switchTab(m){mode=m;
+  document.getElementById('loginTab').className=m==='login'?'px-6 py-2 rounded-full bg-white font-semibold shadow text-sm':'px-6 py-2 rounded-full font-semibold text-sm text-slate-500';
+  document.getElementById('signupTab').className=m==='signup'?'px-6 py-2 rounded-full bg-white font-semibold shadow text-sm':'px-6 py-2 rounded-full font-semibold text-sm text-slate-500';
+  document.getElementById('nameField').classList.toggle('hidden',m==='login');
+  document.getElementById('formTitle').textContent=m==='login'?'Welcome back, Troy! 👋':'Create your account ✨';
+  document.getElementById('formSub').textContent=m==='login'?'Login to continue your streak.':'Start learning with your AI tutor today.';
+  document.getElementById('submitBtn').textContent=m==='login'?'Login →':'Create Account →';
+}
+function togglePass(){let p=document.getElementById('password');p.type=p.type==='password'?'text':'password'}
+async function submitForm(){
+  let email=document.getElementById('email').value.trim(), pass=document.getElementById('password').value, name=document.getElementById('name').value.trim();
+  let err=document.getElementById('error');
+  if(!email.includes('@')||pass.length<6){err.textContent='⚠ Enter valid email + password (6+ chars).';err.classList.remove('hidden');return}
+  if(mode==='signup'&&!name){err.textContent='⚠ Enter your full name.';err.classList.remove('hidden');return}
+  err.classList.add('hidden');
+  document.getElementById('submitBtn').textContent='Loading...';
+  let result;
+  if(mode==='signup'){
+    result=await supabase.auth.signUp({email,password:pass});
+    if(result.error){err.textContent=result.error.message;err.classList.remove('hidden');document.getElementById('submitBtn').textContent='Create Account →';return}
+    if(result.data.user){ await supabase.from('profiles').insert([{id:result.data.user.id, full_name:name, email, role:'student', plan:'Free', points:0}]); }
+    showToast('✅ Account created! Check email to confirm, then login.');
+    document.getElementById('submitBtn').textContent='Create Account →'; switchTab('login'); return;
+  } else {
+    result=await supabase.auth.signInWithPassword({email,password:pass});
+    if(result.error){err.textContent=result.error.message;err.classList.remove('hidden');document.getElementById('submitBtn').textContent='Login →';return}
+    currentUser=result.data.user;
+    document.getElementById('userName').textContent=name||email.split('@')[0];
+    await loadUserData(); showToast('✅ Welcome back!');
+    document.getElementById('submitBtn').textContent='Login →';
+    setTimeout(()=>showPage('dashboard'),600);
+  }
+}
+async function socialLogin(provider){
+  if(provider==='Google'){
+    const { error } = await supabase.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.href } });
+    if(error) showToast('Google not enabled yet: ' + error.message + ' - Enable in Supabase → Auth → Providers → Google');
+    return;
+  }
+  showToast('Apple login coming soon 🍎');
+}
+async function loadUserData(){
+  if(!currentUser) return;
+  let {data:profile}=await supabase.from('profiles').select('*').eq('id',currentUser.id).single();
+  if(profile){
+    pts=profile.points||0; document.getElementById('pts').textContent=pts;
+    document.getElementById('planLabel').textContent=profile.plan||'Free';
+    if(profile.plan==='Premium'){ document.getElementById('premiumBadge').classList.remove('hidden'); document.getElementById('upgradeBtn').textContent='✅ Premium Active'; document.getElementById('planDesc').textContent='Unlimited access unlocked 👑'; }
+    if(profile.full_name) document.getElementById('userName').textContent=profile.full_name.split(' ')[0];
+  }
+  let {data:dbCourses}=await supabase.from('courses').select('*');
+  if(dbCourses && dbCourses.length>0){
+    let {data:prog}=await supabase.from('user_progress').select('*').eq('user_id',currentUser.id);
+    let progMap={}; (prog||[]).forEach(p=>progMap[p.course_id]=p.progress);
+    courses=dbCourses.map(c=>({icon:c.icon||'📚',title:c.title,cat:c.category||'General',prog:progMap[c.id]||0,lessons:`${Math.round((progMap[c.id]||0)/100*c.total_lessons)}/${c.total_lessons} lessons`,time:progMap[c.id]>=100?'Completed':`${100-(progMap[c.id]||0)}% left`,color:'bg-blue-500',dbId:c.id}));
+    let avg=Math.round(courses.reduce((a,c)=>a+c.prog,0)/courses.length);
+    document.getElementById('overallPct').textContent=avg+'%'; document.getElementById('overallBar').style.width=avg+'%';
+    document.getElementById('enrolledCount').textContent=courses.length;
+    renderCourses(); renderDashCourses();
+  }
+  let {data:dbTasks}=await supabase.from('tasks').select('*').eq('user_id',currentUser.id).order('created_at');
+  if(dbTasks && dbTasks.length>0){ tasks=dbTasks.map(t=>({id:t.id,day:t.day,title:t.title,time:t.time,done:t.done})); renderCal(); }
+}
+async function saveProgress(courseTitle,newProg){
+  if(!currentUser) return;
+  let c=courses.find(x=>x.title===courseTitle); if(!c||!c.dbId) return;
+  await supabase.from('user_progress').upsert({user_id:currentUser.id,course_id:c.dbId,progress:newProg},{onConflict:'user_id,course_id'});
+  await supabase.from('profiles').update({points:pts}).eq('id',currentUser.id);
+}
+supabase.auth.onAuthStateChange(async (e,session)=>{
+  if(session?.user){
+    currentUser=session.user;
+    document.getElementById('dbStatus').textContent='✅ Connected to Supabase';
+    // Create profile if Google first login
+    let {data:existing}=await supabase.from('profiles').select('*').eq('id',session.user.id).single();
+    if(!existing){
+      await supabase.from('profiles').insert([{id:session.user.id, full_name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || 'Student', email: session.user.email, role:'student', plan:'Free', points:0}]);
+    }
+    await loadUserData();
+    if(document.getElementById('page-login').classList.contains('active')) showPage('dashboard');
+  } else { document.getElementById('dbStatus').textContent='✅ Connected - Please login'; }
+});
+
+// ===== DASHBOARD =====
+function renderDashCourses(){ document.getElementById('dashCourses').innerHTML=courses.slice(0,3).map(c=>`<div class="border rounded-2xl p-4 flex gap-3 card-hover cursor-pointer" onclick="showPage('courses')"><div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-2xl shrink-0">${c.icon}</div><div class="flex-1"><p class="font-bold">${c.title}</p><p class="text-slate-500 text-[13px]">${c.lessons} • ${c.time}</p><div class="flex items-center gap-2 mt-2"><div class="progress flex-1"><div style="width:${c.prog}%;background:#2563eb"></div></div><span class="text-xs font-semibold">${c.prog}%</span></div></div></div>`).join(''); }
+renderDashCourses();
+document.getElementById('subjects').innerHTML=[['🧮','Mathematics','124 lessons','bg-blue-500'],['💻','Computer Science','98 lessons','bg-purple-500'],['🔬','Science','86 lessons','bg-green-500'],['📚','English','72 lessons','bg-orange-500']].map(s=>`<div onclick="showPage('courses')" class="bg-white border rounded-2xl p-4 card-hover cursor-pointer flex items-center gap-3"><div class="w-11 h-11 ${s[3]} rounded-xl flex items-center justify-center text-white text-xl">${s[0]}</div><div><p class="font-bold text-[15px]">${s[1]}</p><p class="text-slate-500 text-xs">${s[2]}</p></div></div>`).join('');
+function sendMsg(){let inp=document.getElementById('chatInput');let v=inp.value.trim();if(!v) return;let chat=document.getElementById('chat');chat.innerHTML+=`<div class="bg-blue-600 text-white rounded-2xl p-3 text-[14px] max-w-[90%] ml-auto w-fit">${v}</div>`;inp.value='';setTimeout(()=>{let r="For BCE 211: LBP compares neighbour to centre - if neighbour >= centre, it's 1 else 0. Want practice?";if(v.toLowerCase().includes('algebra')) r="Linear: 2x + 6 = 0 -> x = -3.";if(v.toLowerCase().includes('quiz')) r="Quiz: LBP for centre 4 with neighbours 5,8,1,5,1,3,7,2? Answer: 23!";chat.innerHTML+=`<div class="bg-white border rounded-2xl p-3 text-[14px] max-w-[90%]">${r}</div>`;chat.scrollTop=chat.scrollHeight},600)}
+function quickAsk(q){document.getElementById('chatInput').value=q;sendMsg()}
+
+// ===== RECOMMENDATIONS =====
+document.getElementById('recList').innerHTML=recs.map(r=>`<div class="bg-white border rounded-2xl p-4 flex gap-3 card-hover"><div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-2xl shrink-0">${r.icon}</div><div class="flex-1"><div class="flex justify-between gap-2"><p class="font-bold">${r.title}</p><span class="${r.tagC} text-[11px] px-2 py-1 rounded-full h-fit font-semibold">${r.tag}</span></div><p class="text-slate-500 text-sm">${r.why} • ${r.time}</p><div class="flex items-center gap-2 mt-2"><div class="progress flex-1"><div style="width:${r.prog}%;background:#2563eb"></div></div><span class="text-xs font-semibold">${r.prog}%</span><button onclick="addPts(20);showToast('Started +20 pts 🎉')" class="bg-blue-600 text-white px-4 py-1.5 rounded-full text-sm font-semibold">Start →</button></div></div></div>`).join('');
+function answerQuiz(el,ok){document.getElementById('quizResult').textContent=ok?'✅ Correct! LBP = 23. +20 pts':'❌ Wrong. Neighbour >= centre = 1.';document.getElementById('quizResult').style.color=ok?'#16a34a':'#dc2626';if(ok)addPts(20)}
+function genPlan(){document.getElementById('insight').textContent='New plan! Focus on Filtering today. Predicted score now 84%.';showToast('✨ New AI Plan Generated!')}
+
+// ===== TUTORS =====
+function renderTutors(){let q=(document.getElementById('searchTutor').value||'').toLowerCase();let list=tutors.filter(t=>(t.name+t.subject).toLowerCase().includes(q));document.getElementById('tutorGrid').innerHTML=list.map(t=>`<div class="bg-white border rounded-2xl p-5 card-hover"><div class="flex gap-3"><div class="w-14 h-14 ${t.color} rounded-2xl flex items-center justify-center text-3xl shrink-0">${t.avatar}</div><div><p class="font-bold">${t.name}</p><p class="text-slate-500 text-sm">${t.subject}</p><p class="text-sm mt-1">⭐ ${t.rating} • ${t.students} • <b>${t.price}</b></p></div></div><p class="text-slate-600 text-sm mt-3">${t.desc}</p><div class="flex gap-2 mt-4"><button onclick="showToast('Chat with ${t.name} - use AI Tutor on Dashboard')" class="flex-1 bg-blue-600 text-white py-2.5 rounded-full font-semibold text-sm">💬 Chat Now</button><button onclick="showToast('📅 Booked with ${t.name}!');addPts(5)" class="flex-1 border py-2.5 rounded-full font-semibold text-sm">📅 Book</button></div></div>`).join('')}
+
+// ===== CALENDAR =====
+function renderCal(){
+  document.getElementById('calGrid').innerHTML=[23,24,25,26,27,28,29].map(d=>{let dayTasks=tasks.filter(t=>t.day===d);return `<div onclick="selectedDay=${d};renderCal()" class="border rounded-xl p-1.5 cursor-pointer min-h-[92px] ${d===selectedDay?'ring-2 ring-blue-600 bg-blue-50':''}"><p class="font-bold text-sm">${d} ${d===24?'<span class="text-[10px] bg-blue-600 text-white px-1 rounded-full">TODAY</span>':''}</p>${dayTasks.map(t=>`<div class="text-[10px] bg-blue-100 text-blue-700 rounded px-1 py-0.5 mt-1 truncate ${t.done?'line-through opacity-60':''}">${t.time} ${t.title}</div>`).join('')}</div>`}).join('');
+  let list=tasks.filter(t=>t.day===selectedDay);
+  document.getElementById('todayCount').textContent=list.length;
+  document.getElementById('taskList').innerHTML=list.length?list.map(t=>`<label class="flex gap-2 items-center bg-slate-50 rounded-xl p-3 cursor-pointer"><input type="checkbox" ${t.done?'checked':''} onchange="toggleTask(${tasks.indexOf(t)})" class="accent-blue-600 w-4 h-4"><span class="flex-1 text-sm ${t.done?'line-through text-slate-400':''}">${t.title} • ${t.time}</span></label>`).join(''):'<p class="text-slate-500 text-sm">No tasks. Free day! 🎉</p>';
+}
+async function toggleTask(i){
+  tasks[i].done=!tasks[i].done; if(tasks[i].done) await addPts(10);
+  if(currentUser && tasks[i].id){ await supabase.from('tasks').update({done:tasks[i].done}).eq('id',tasks[i].id); }
+  renderCal();
+}
+async function addTask(){
+  let v=document.getElementById('newTask').value.trim(); if(!v){v=prompt('Task name:'); if(!v) return}
+  let newTask={day:selectedDay,title:v,time:'5:00 PM',done:false};
+  if(currentUser){ let {data}=await supabase.from('tasks').insert([{user_id:currentUser.id,title:v,day:selectedDay,time:'5:00 PM',done:false}]).select().single(); if(data) newTask.id=data.id; }
+  tasks.push(newTask); document.getElementById('newTask').value=''; renderCal(); showToast('Task saved ✅');
+}
+function autoSchedule(){ tasks.push({day:25,title:'AI: Revise Filtering (Weak)',time:'9:00 AM',done:false}); renderCal(); showToast('✨ AI scheduled Filtering on Wed 9am'); }
+
+// ===== COURSES =====
+function renderCourses(){
+  let q=(document.getElementById('searchCourse').value||'').toLowerCase(); let list=courses.filter(c=>c.title.toLowerCase().includes(q));
+  document.getElementById('courseGrid').innerHTML=list.map(c=>`<div class="bg-white border rounded-2xl overflow-hidden card-hover"><div class="${c.color} h-[110px] flex items-center justify-center text-[52px]">${c.icon}</div><div class="p-4"><span class="bg-slate-100 text-xs px-2 py-1 rounded-full font-semibold">${c.cat}</span><p class="font-bold mt-2">${c.title}</p><p class="text-slate-500 text-sm">${c.lessons} • ${c.time}</p><div class="flex items-center gap-2 mt-3"><div class="progress flex-1"><div style="width:${c.prog}%;background:${c.prog===100?'#22c55e':'#2563eb'}"></div></div><span class="text-xs font-bold">${c.prog}%</span></div><button onclick="continueCourse('${c.title}')" class="mt-3 w-full ${c.prog===100?'bg-green-600':'bg-blue-600'} text-white py-2.5 rounded-full font-semibold text-sm">${c.prog===100?'View Certificate 🏆':'Continue →'}</button></div></div>`).join('');
+}
+async function continueCourse(title){
+  let c=courses.find(x=>x.title===title); if(!c) return;
+  let newProg=Math.min(100, c.prog+10); c.prog=newProg; c.lessons=`${Math.round(newProg/100*10)}/10 lessons`;
+  await addPts(10); await saveProgress(title,newProg); renderCourses(); renderDashCourses(); showToast(`Progress saved: ${title} now ${newProg}% ✅`);
+}
+
+// ===== M-PESA =====
+function upgrade(){ document.getElementById('payModal').classList.remove('hidden'); }
+function closePay(){ document.getElementById('payModal').classList.add('hidden'); }
+async function payWithMpesa(){
+  let phone=document.getElementById('mpesaPhone').value.trim();
+  let plan=document.querySelector('input[name="plan"]:checked')?.value || 'monthly';
+  let amount=plan==='yearly'?4999:499;
+  if(!phone.match(/^(07|01|2547|2541)\d{8}$/) && !phone.match(/^254\d{9}$/)){ showToast('⚠ Enter valid number: 0712345678'); return; }
+  if(!currentUser){ showToast('Please login first'); showPage('login'); return; }
+  document.getElementById('payBtn').textContent='Sending STK Push...'; document.getElementById('payBtn').disabled=true;
+  document.getElementById('payStatus').textContent='⏳ Sending STK Push to '+phone+'...';
+  try{
+    const res=await fetch('https://eliswitgkynbwrkuwcpu.supabase.co/functions/v1/mpesa-stk',{
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_KEY}`},
+      body: JSON.stringify({phone, amount, user_id: currentUser.id, plan})
+    });
+    const data=await res.json(); console.log('MPESA:',data);
+    if(data.ResponseCode==='0'){
+      showToast('📱 Check your phone! Enter M-Pesa PIN.');
+      document.getElementById('payStatus').textContent='⏳ Waiting for M-Pesa PIN... Check your phone.';
+      document.getElementById('payStatus').className='text-orange-600 text-sm font-semibold mt-2';
+    } else {
+      // If Edge Function not deployed yet, fall back to demo
+      showToast('Edge Function not deployed yet - use Demo mode below');
+      document.getElementById('payStatus').textContent='⚠ Deploy mpesa-stk Edge Function to enable real STK Push. Use Demo mode for now.';
+    }
+  } catch(e){
+    document.getElementById('payStatus').textContent='⚠ Edge Function not found. Click "Simulate payment" for demo.';
+    showToast('Demo mode: click Simulate payment');
+  }
+  document.getElementById('payBtn').textContent='Pay with M-Pesa 💚'; document.getElementById('payBtn').disabled=false;
+}
+async function simulatePayment(){
+  let plan=document.querySelector('input[name="plan"]:checked')?.value || 'monthly';
+  let amount=plan==='yearly'?4999:499;
+  let phone=document.getElementById('mpesaPhone').value.trim() || '0712345678';
+  document.getElementById('payStatus').textContent='⏳ Simulating M-Pesa... Check phone...';
+  setTimeout(async ()=>{
+    if(currentUser){
+      await supabase.from('profiles').update({plan:'Premium'}).eq('id',currentUser.id);
+      try{ await supabase.from('payments').insert([{user_id:currentUser.id, phone, amount, plan, status:'completed'}]); }catch(e){}
+    }
+    document.getElementById('planLabel').textContent='Premium';
+    document.getElementById('premiumBadge').classList.remove('hidden');
+    document.getElementById('upgradeBtn').textContent='✅ Premium Active';
+    document.getElementById('planDesc').textContent='Unlimited access unlocked 👑';
+    document.getElementById('payStatus').textContent='✅ Payment successful! You are now Premium 👑';
+    document.getElementById('payStatus').className='text-green-600 text-sm font-semibold mt-2';
+    showToast('🎉 Welcome to Premium! Unlimited access unlocked.');
+    setTimeout(()=>closePay(),2000);
+  },2000);
+}
+
+// ===== ADMIN =====
+async function loadAdmin(){
+  let {data:profiles}=await supabase.from('profiles').select('*').order('created_at',{ascending:false});
+  let {data:allCourses}=await supabase.from('courses').select('*');
+  let {data:allTasks}=await supabase.from('tasks').select('*');
+  let {data:payments}=await supabase.from('payments').select('*').order('created_at',{ascending:false}).limit(5);
+  users=profiles||[];
+  document.getElementById('adminTotalUsers').textContent=users.length;
+  document.getElementById('adminTotalCourses').textContent=(allCourses||[]).length;
+  document.getElementById('adminTotalTasks').textContent=(allTasks||[]).length;
+  document.getElementById('adminPoints').textContent=pts;
+  if(payments && payments.length>0){
+    document.getElementById('paymentsList').innerHTML=payments.map(p=>`<div class="flex justify-between bg-green-50 rounded-xl p-3"><span>💚 ${p.phone} • ${p.plan}</span><span class="font-bold">KSh ${p.amount} • ${p.status}</span></div>`).join('');
+  }
+  renderUsers();
+}
+function renderUsers(){
+  let q=(document.getElementById('searchUser').value||'').toLowerCase(); let list=users.filter(u=>((u.full_name||'')+(u.email||'')).toLowerCase().includes(q));
+  document.getElementById('userRows').innerHTML=list.map(u=>`<tr class="border-t"><td class="px-4 py-3"><p class="font-semibold">${u.full_name||'No name'}</p><p class="text-slate-500 text-xs">${u.email||''}</p></td><td class="px-4 py-3"><span class="${u.plan==='Premium'?'bg-yellow-100 text-yellow-800':'bg-slate-100 text-slate-600'} px-2 py-1 rounded-full text-xs font-semibold">${u.plan||'Free'}</span></td><td class="px-4 py-3 font-semibold">${u.points||0} pts</td><td class="px-4 py-3"><button onclick="togglePlan('${u.id}')" class="text-blue-600 font-semibold text-xs">Upgrade</button> <button onclick="deleteUser('${u.id}')" class="text-red-600 font-semibold text-xs ml-2">Delete</button></td></tr>`).join('') || '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-500">No users yet.</td></tr>';
+}
+async function togglePlan(id){ let u=users.find(x=>x.id===id); if(!u) return; let newPlan=u.plan==='Premium'?'Free':'Premium'; await supabase.from('profiles').update({plan:newPlan}).eq('id',id); u.plan=newPlan; renderUsers(); showToast(u.full_name+' now '+newPlan); }
+async function deleteUser(id){ if(!confirm('Delete this user profile?')) return; await supabase.from('profiles').delete().eq('id',id); users=users.filter(u=>u.id!==id); renderUsers(); showToast('User deleted'); }
+async function addUser(){ let n=prompt('New user name:'); if(!n) return; let e=prompt('Email:'); if(!e) return; let {data}=await supabase.from('profiles').insert([{full_name:n,email:e,plan:'Free',points:0}]).select().single(); if(data){ users.unshift(data); renderUsers(); showToast('User added: '+n); } }
+
+// Init
+renderCourses(); renderCal(); renderTutors(); showPage('login');
+</script>
+</body>
+</html>
