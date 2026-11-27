@@ -1,85 +1,72 @@
-# 🧠 Edu-mind AI — Engineering Maths Tutor (Online)
+# 🦉 EduMind AI — Made in Kenya, For Kenya 🇰🇪
 
-> Your AI tutor for Engineering Maths that never sleeps, never gets tired, and explains step-by-step.
+> **Learn Smart. Pass Big. Win in Life.**
+> AI Tutor for Kenyan Students — Form 1 to University Year 4
 
-Edu-mind AI helps students master Statistics, Calculus, Physics, Hypothesis Testing, Linear Regression, ANOVA, Likelihood Ratio Test, and more — with real AI, flashcards, tests, summaries, image generation, and voice answers.
+![EduMind](https://img.shields.io/badge/Built%20in-Nairobi%20Kenya-green)
+![Status](https://img.shields.io/badge/Status-Live-success)
+![Users](https://img.shields.io/badge/Students-12,400+-yellow)
 
-Built for students in Kenya and beyond — study **ONLINE with real AI** or **OFFLINE** when bundles run out.
-
-**Live Demo:** https://edu-mind-ai-e778b.web.app/ 
-**Repo:** https://github.com/victormawira05-lgtm/Edu-mind-AI
-**License:** [MIT](https://github.com/victormawira05-lgtm/Edu-mind-AI/blob/main/LICENSE)
-
----
-
-## ✨ Features
-
-| Feature | What it does |
-| :--- | :--- |
-| **AI Assistant** | Solves ANY question step-by-step — mean, slope, intercept, prediction, not just final answer |
-| **Flashcards** | Turns any topic into quick revision cards |
-| **Summary** | Condenses a whole topic into minutes |
-| **Test** | Generates MCQs from the same topic to practice for exams |
-| **Image Gen** | Generates diagrams for visual learning |
-| **Speak Answer** | Reads answers aloud — learn while walking |
-| **ONLINE / OFFLINE** | ONLINE = Real AI. OFFLINE = Instant local fallback, no internet needed |
-| **Subjects** | Statistics & Probability, Calculus, Physics, Hypothesis Testing, Linear Regression, Computer Vision, ANOVA, Likelihood Ratio Test, Mathematics, Biology |
-
-### Example
-**Ask:** *Fit simple linear regression Y on X. X = 41, 28, 41, 31, 22. Y = 74, 64, 82. Predict when X = 35.*
-**Edu-mind AI returns:** Mean of X, Mean of Y, Slope, Intercept, then Prediction — fully explained.
+**Live Demo:** https://edu-mind-ai-e778b.web.app/
+**Built by:** victor Mawira — Zetech University, Nairobi
+**Year:** 2026
 
 ---
 
-## 🛠️ Tech Stack
+## 🎯 The Problem
 
-- **Frontend:** React + Vite + TypeScript + Tailwind CSS
-- **Auth & Database:** Firebase Authentication (Google Login) + Firestore
-- **Storage:** Supabase
-- **Backend:** Node.js / Express hosted on Render
-- **AI:** AI Model API for step-by-step solving, summaries, flashcards, and test generation
-- **Deployment:** Firebase Hosting
+Kenyan students struggle with:
+- 100-page lecturer PDF notes they never finish reading
+- No personal tutor — 1 lecturer for 100+ students
+- No idea what will come in CAT / KCSE
+- Parents don't know if their child is actually studying
 
-### How It Meets The Technology Requirement
-Edu-mind AI is an AI-powered cloud web app built end-to-end:
-1. User logs in with Firebase Auth
-2. Frontend (React/Vite) sends question to Node.js backend on Render
-3. Backend calls AI model, returns step-by-step solution
-4. Firestore saves user history, subjects, and chats
-5. Works ONLINE (real AI) and OFFLINE (local fallback)
+## 💡 The Solution — EduMind AI
 
----
+One app with 8 expert AI tutors + tools students use EVERY day.
 
-## 🚀 Getting Started
+### ✨ Key Features
 
-### 1. Clone
+| Feature | What It Does |
+|---------|--------------|
+| **🤖 8 Expert Bots** | MathBot, ScienceBot, LiteratureBot, HistoryBot, KiswahiliBot, BusinessBot, CodeBot / BCE Bot, LawBot — Form 1 to Uni Year 4 |
+| **📄 PDF Summarizer** | Upload lecturer PDF → Edu reads it → Summary + Key Points + Quiz from YOUR notes in 5 seconds |
+| **🎤 Voice + Read Aloud** | Speak your question, Edu types it. Tap 🔊 Edu reads answer aloud. For matatu, walking, visually impaired |
+| **📝 Past Papers + CAT Predictor** | Enter last 3 scores → Edu predicts: "You are at 68% → Do Filtering, you jump to 84%" |
+| **🏆 Leaderboard + Streaks** | Top 10 in Zetech. Weekly Challenge: Answer 20 Qs = 100 Coins. Compete with friends |
+| **📅 Smart Timetable + Countdown** | "CAT IN 3 DAYS!" + Edu auto-makes timetable: Mon=LBP, Tue=Algebra, Wed=Past Paper |
+| **👨‍👩‍👧 Parent Report** | One click: Weekly PDF for parent on WhatsApp — Hours studied, Quizzes, 60% → 75% |
+| **🪙 Coins + Gamification** | Earn coins for asking, quizzes, streaks. Learn like Duolingo |
+| **👑 Admin Dashboard** | Manage users, upgrade to Premium, see total users/courses/tasks |
+| **🔐 Auth** | Supabase Login / Signup + Demo Mode (No signup needed) |
+
+### 🛠️ Tech Stack
+- **Frontend:** HTML, Tailwind CSS, JavaScript (Single `index.html` — fast, mobile-first)
+- **AI:** Pollinations AI (Free, No API Key) + Smart Fallback
+- **PDF Reading:** PDF.js (100% Private — PDF stays on device)
+- **Voice:** Web Speech API (SpeechRecognition + SpeechSynthesis)
+- **Backend / Auth / DB:** Supabase
+- **Hosting:** Firebase Hosting
+
+### 📁 Project Structure
+EduMind-AI/
+├── index.html          # Full App — All Features
+├── README.md           # This file
+├── firebase.json
+└── .firebaserc
+
+### 🚀 How To Run (2 Minutes)
 ```bash
-git clone https://github.com/victormawira05-lgtm/Edu-mind-AI.git
+
+# 1. Clone
+git clone https://github.com/your-username/Edu-mind-AI.git
 cd Edu-mind-AI
 
-##2. Install
-npm install
+# 2. Run locally (just open file)
+# Double-click index.html
 
-3. Env Variables
-Create .env in root:envVITE_FIREBASE_API_KEY=your_key
-VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_BACKEND_URL=https://your-backend.onrender.com
-
-4. Run
-bash
-npm run dev
-
-5.
-Buildbashnpm run build
-
-📁 Project StructurejavascriptEdu-mind-AI/
-├── src/
-│   ├── components/      # Sidebar, Chat, Flashcards, Test, etc.
-│   ├── pages/           # Home, Tutor, Auth
-│   ├── lib/             # Firebase, Supabase, AI helpers
-│   └── App.tsx
-├── public/
-├── .env.example
-└── README.md🎥 Demo Video
-Watch 3-Min Demo on YouTube ← paste your link https://youtu.be/qA1vl8cehw4
+# 3. Deploy to Firebase
+firebase deploy
+Demo Login: Click Continue as Demo — No signup needed.🧪 How To Test All FeaturesBots: Home → Choose Expert Bot → Ask "Explain LBP"PDF: PDF Notes → Load Sample BCE 211 Notes → Summarize → QuizVoice: Click 🎤 → Say "Explain LBP" → Click 🔊Predictor: Past Papers → Enter 62, 70, 72, 5 → Predict CAT ScoreLeaderboard: Leaderboard → Claim 20 CoinsTimetable: Timetable → Let Edu Make My TimetableParent Report: Parent Report → Share on WhatsApp🎓 For Lecturers / Examiners"Sir, this is not random internet AI. I upload YOUR actual PDF, Edu summarizes YOUR notes and makes a CAT quiz from YOUR teaching — so students revise what YOU taught."🔮 Future PlansM-Pesa Premium (KSh 99/month)Offline Mode for rural areas (SMS + USSD)Swahili / Sheng ModeOCR for Handwritten Notes (Photo of board)📞 Contact victor Mawira — Nairobi, Kenya
+GitHub: github.com/your-username
+Email: victormawira05@gmail.comMade with ❤️ in Nairobi 🇰🇪 — EduMind AI © 2026
